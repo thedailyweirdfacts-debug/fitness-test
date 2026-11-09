@@ -1,0 +1,22 @@
+{
+  "name": "plateful",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "npm --prefix mobile start",
+    "web": "npm --prefix mobile run web",
+    "server": "npm --prefix server run dev",
+    "test": "vitest run",
+    "typecheck": "tsc -p shared/tsconfig.json --noEmit && tsc -p server/tsconfig.json --noEmit && tsc -p mobile/tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "~6.0.3",
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "zod": "3.25.76"
+  }
+}
