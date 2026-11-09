@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Plateful",
+    "slug": "plateful",
+    "scheme": "plateful",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.plateful.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Plateful uses the camera to estimate what's on your plate.",
+        "NSPhotoLibraryUsageDescription": "Plateful uses your photos so you can log a meal from a picture you already took."
+      }
+    },
+    "android": {
+      "package": "com.plateful.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#1F6B45",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Plateful uses your photos so you can log a meal from a picture you already took.",
+          "cameraPermission": "Plateful uses the camera to estimate what's on your plate."
+        }
+      ]
+    ]
+  }
+}
