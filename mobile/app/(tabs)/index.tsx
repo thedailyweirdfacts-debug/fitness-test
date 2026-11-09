@@ -18,6 +18,7 @@ import { MacroLine, PlateArt } from "../../src/components/ui";
 import { AnalyzeError, analyzeImage } from "../../src/lib/api";
 import { draftFromAnalysis } from "../../src/lib/draft";
 import { preparePlatePhoto } from "../../src/lib/photos";
+import { resolveAppSecret } from "../../src/lib/settings";
 import { useApp } from "../../src/state/AppContext";
 import { colors, displayFont, shadow } from "../../src/theme";
 import { formatAmount } from "../../src/components/ui";
@@ -75,7 +76,7 @@ export default function ScanScreen() {
         openDraft(draftFromAnalysis(sample.analysis, { photoUri, source: "demo", sampleId: sample.id }));
       } else {
         if (!prepared) throw new AnalyzeError("That photo couldn't be prepared. Try another one.", "bad_response");
-        const analysis = await analyzeImage(settings.apiBaseUrl, prepared);
+        const analysis = await analyzeImage(settings.apiBaseUrl, prepared, resolveAppSecret(settings.appSecret));
         openDraft(draftFromAnalysis(analysis, { photoUri, source: "vision", sampleId: null }));
       }
       router.push("/results");

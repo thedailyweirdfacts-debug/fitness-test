@@ -43,6 +43,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setSettings({
               useDemoMode: parsed.data.useDemoMode,
               apiBaseUrl: normalizeApiBaseUrl(parsed.data.apiBaseUrl),
+              appSecret: parsed.data.appSecret ?? defaultSettings().appSecret,
             });
           }
         }
@@ -72,6 +73,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         const stored: AppSettings = {
           useDemoMode: next.useDemoMode,
           apiBaseUrl: normalizeApiBaseUrl(next.apiBaseUrl),
+          appSecret: next.appSecret.trim(),
         };
         await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(stored));
         setSettings(stored);

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { PrimaryButton } from "../src/components/ui";
@@ -15,9 +15,16 @@ export default function SettingsScreen() {
   const { settings, saveSettings } = useApp();
   const [useDemoMode, setUseDemoMode] = useState(settings.useDemoMode);
   const [apiBaseUrl, setApiBaseUrl] = useState(settings.apiBaseUrl);
+  const [appSecret, setAppSecret] = useState(settings.appSecret);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setUseDemoMode(settings.useDemoMode);
+    setApiBaseUrl(settings.apiBaseUrl);
+    setAppSecret(settings.appSecret);
+  }, [settings]);
 
   async function save() {
     const url = normalizeApiBaseUrl(apiBaseUrl);
@@ -32,7 +39,7 @@ export default function SettingsScreen() {
     setSaving(true);
     setError(null);
     try {
-      await saveSettings({ useDemoMode, apiBaseUrl: url });
+      await saveSettings({ useDemoMode, apiBaseUrl: url, appSecret: appSecret.trim() });
       setStatus("Saved.");
     } catch {
       setError("Couldn't save settings on this device.");
@@ -65,7 +72,7 @@ export default function SettingsScreen() {
       </Pressable>
       <Text style={styles.title}>Settings</Text>
       <Text style={styles.lead}>
-        The app never holds an API key. It only knows where your server is. The server reads the key from its own environment.
+        The Gemini key stays on the server. This app only knows the server address and a shared password, so a stranger cannot spend your free quota.
       </Text>
 
       <View style={styles.card}>
@@ -100,6 +107,24 @@ export default function SettingsScreen() {
         <Pressable accessibilityRole="button" onPress={testConnection} style={styles.link}>
           <Text style={styles.linkText}>Check connection</Text>
         </Pressable>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.rowTitle}>App secret</Text>
+        <Text style={styles.rowCopy}>
+          The same password you set as APP_SECRET on the server. This is not the Gemini key. Leave it blank to use the one baked into this install.
+        </Text>
+        <TextInput
+          value={appSecret}
+          onChangeText={setAppSecret}
+          autoCapitalize="none"
+          autoCorrect={false}
+          secureTextEntry
+          placeholder="Shared password"
+          placeholderTextColor={colors.faint}
+          style={styles.input}
+          accessibilityLabel="App secret"
+        />
       </View>
 
       {status ? <Text style={styles.status}>{status}</Text> : null}

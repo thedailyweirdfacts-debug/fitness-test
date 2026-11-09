@@ -1,20 +1,16 @@
-import { createProvider, resolveVisionConfig } from "./config";
 import { loadEnvFile } from "./env";
+import { runtimeOptions } from "./runtime";
 import { createServer } from "./server";
 
 loadEnvFile();
 
-const config = resolveVisionConfig(process.env);
-const provider = createProvider(config);
-const server = createServer({
-  provider,
-  providerId: config.providerId,
-  model: config.model,
-});
+const options = runtimeOptions();
+const server = createServer(options);
 
 const port = Number(process.env.PORT ?? 8787);
 server.listen(port, "0.0.0.0", () => {
-  const keyState = config.apiKey ? "key configured" : "no key set, estimates will fail until you add one";
+  const keyState = options.provider ? "key configured" : "no key set, estimates will fail until you add one";
+  const secretState = options.appSecret ? "app secret set" : "APP_SECRET missing, estimates will be refused";
   console.log(`Plateful vision server listening on http://0.0.0.0:${port}`);
-  console.log(`Provider ${config.providerId} · model ${config.model} · ${keyState}`);
+  console.log(`Provider ${options.providerId} · model ${options.model} · ${keyState} · ${secretState}`);
 });

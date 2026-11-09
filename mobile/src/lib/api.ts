@@ -24,6 +24,7 @@ function endpoint(baseUrl: string, path: string): string {
 export async function analyzeImage(
   baseUrl: string,
   image: { imageBase64: string; mimeType: string },
+  appSecret: string,
 ): Promise<MealAnalysis> {
   if (!baseUrl.trim()) {
     throw new AnalyzeError("Add the server address in Settings, or turn demo mode back on.", "network");
@@ -33,7 +34,10 @@ export async function analyzeImage(
   try {
     response = await fetch(endpoint(baseUrl, "/api/analyze"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-plateful-secret": appSecret,
+      },
       body: JSON.stringify(image),
     });
   } catch {
