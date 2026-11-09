@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { itemsFromAnalysis } from "./nutrition";
+import { mealTypeForTime } from "./meal-type";
 import { SAUSAGE_MEAL } from "./mocks";
 import type { LoggedMeal } from "./schema";
 import { addDays, dailyTotals, dayKeyFromDate, formatDayLabel, mealsForDay } from "./dates";
@@ -9,6 +10,7 @@ function mealAt(date: Date, id: string): LoggedMeal {
     id,
     loggedAt: date.toISOString(),
     photoUri: null,
+    mealType: mealTypeForTime(date),
     items: itemsFromAnalysis(SAUSAGE_MEAL, (index) => `${id}-${index}`),
     confidence: "medium",
     notes: "",

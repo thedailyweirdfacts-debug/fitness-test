@@ -6,6 +6,7 @@ import { useState } from "react";
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
+  buildRewardReport,
   dailyTotals,
   dayKeyFromDate,
   getSample,
@@ -14,6 +15,7 @@ import {
   sampleBlurb,
   sampleTitle,
 } from "../../../shared/src";
+import { GoalProgress } from "../../src/components/GoalProgress";
 import { MacroLine, PlateArt } from "../../src/components/ui";
 import { AnalyzeError, analyzeImage } from "../../src/lib/api";
 import { draftFromAnalysis } from "../../src/lib/draft";
@@ -30,8 +32,18 @@ export default function ScanScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const today = dailyTotals(meals, dayKeyFromDate(new Date()));
-  const hasToday = meals.some((meal) => dayKeyFromDate(new Date(meal.loggedAt)) === dayKeyFromDate(new Date()));
+  const todayKey = dayKeyFromDate(new Date());
+  const today = dailyTotals(meals, todayKey);
+  const hasToday = meals.some((meal) => dayKeyFromDate(new Date(meal.loggedAt)) === todayKey);
+  const report = buildRewardReport(
+    meals,
+    {
+      calorieGoal: settings.calorieGoal,
+      proteinGoal: settings.proteinGoal,
+      windowPercent: settings.goalWindowPercent,
+    },
+    todayKey,
+  );
 
   async function choose(source: "camera" | "library") {
     setError(null);
@@ -131,6 +143,9 @@ export default function ScanScreen() {
           ) : (
             <Text style={styles.todayEmpty}>Nothing logged yet. Your running total will show up here.</Text>
           )}
+          {settings.calorieGoal != null ? (
+            <GoalProgress status={report.today} currentStreak={report.currentStreak} bestStreak={report.bestStreak} />
+          ) : null}
         </Pressable>
 
         <Pressable

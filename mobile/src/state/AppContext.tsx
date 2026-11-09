@@ -1,9 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { createId, parseMealLog, type LoggedMeal } from "../../../shared/src";
+import { createId, needsMealTypeMigration, parseMealLog, type LoggedMeal, type MealType } from "../../../shared/src";
 import type { Draft } from "../lib/draft";
 import { deleteStoredPhoto, persistMealPhoto } from "../lib/photos";
-import { defaultSettings, normalizeApiBaseUrl, settingsSchema, type AppSettings } from "../lib/settings";
+import { defaultSettings, normalizeApiBaseUrl, settingsFromStorage, settingsSchema, type AppSettings } from "../lib/settings";
 
 const SETTINGS_KEY = "@plateful/settings";
 const MEALS_KEY = "@plateful/meals";
@@ -16,6 +16,7 @@ type AppContextValue = {
   saveSettings: (next: AppSettings) => Promise<void>;
   openDraft: (draft: Draft) => void;
   saveDraft: (draft: Draft) => Promise<void>;
+  updateMealType: (id: string, mealType: MealType) => Promise<void>;
   deleteMeal: (id: string) => Promise<void>;
 };
 
@@ -39,18 +40,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         if (settingsRaw) {
           const parsed = settingsSchema.safeParse(JSON.parse(settingsRaw));
-          if (parsed.success) {
-            setSettings({
-              useDemoMode: parsed.data.useDemoMode,
-              apiBaseUrl: normalizeApiBaseUrl(parsed.data.apiBaseUrl),
-              appSecret: parsed.data.appSecret ?? defaultSettings().appSecret,
-            });
-          }
+          if (parsed.success) setSettings(settingsFromStorage(parsed.data));
         }
         if (mealsRaw) {
-          const parsed = parseMealLog(JSON.parse(mealsRaw));
+          const raw = JSON.parse(mealsRaw);
+          const parsed = parseMealLog(raw);
           mealsRef.current = parsed;
           setMeals(parsed);
+          if (needsMealTypeMigration(raw)) {
+            await AsyncStorage.setItem(MEALS_KEY, JSON.stringify(parsed));
+          }
         }
       } catch {
         // Unreadable storage falls back to an empty log and demo mode.
@@ -74,6 +73,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
           useDemoMode: next.useDemoMode,
           apiBaseUrl: normalizeApiBaseUrl(next.apiBaseUrl),
           appSecret: next.appSecret.trim(),
+          calorieGoal: next.calorieGoal,
+          proteinGoal: next.proteinGoal,
+          goalWindowPercent: next.goalWindowPercent,
         };
         await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(stored));
         setSettings(stored);
@@ -89,6 +91,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           id: mealId,
           loggedAt: next.loggedAt ?? new Date().toISOString(),
           photoUri,
+          mealType: next.mealType,
           items: next.items.map((item) => ({ ...item, name: item.name.trim() })),
           confidence: next.confidence,
           notes: next.notes,
@@ -108,6 +111,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
         mealsRef.current = nextMeals;
         setMeals(nextMeals);
         setDraft(next);
+      },
+      async updateMealType(id, mealType) {
+        const nextMeals = mealsRef.current.map((meal) => (meal.id === id ? { ...meal, mealType } : meal));
+        await AsyncStorage.setItem(MEALS_KEY, JSON.stringify(nextMeals));
+        mealsRef.current = nextMeals;
+        setMeals(nextMeals);
+        setDraft((current) => (current?.editingId === id ? { ...current, mealType } : current));
       },
       async deleteMeal(id) {
         const current = mealsRef.current;

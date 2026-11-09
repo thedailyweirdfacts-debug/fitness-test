@@ -1,3 +1,4 @@
+import { mealTypeFromUnknown } from "./meal-type";
 import {
   AnalysisError,
   type AnalysisItem,
@@ -184,8 +185,16 @@ export function parseMealLog(raw: unknown): LoggedMeal[] {
   if (!Array.isArray(raw)) return [];
   const meals: LoggedMeal[] = [];
   for (const entry of raw) {
-    const parsed = loggedMealSchema.safeParse(entry);
+    const migrated = migrateMealType(entry);
+    const parsed = loggedMealSchema.safeParse(migrated);
     if (parsed.success) meals.push(parsed.data);
   }
   return meals;
+}
+
+function migrateMealType(entry: unknown): unknown {
+  if (!entry || typeof entry !== "object") return entry;
+  const record = entry as { mealType?: unknown; loggedAt?: unknown };
+  const loggedAt = typeof record.loggedAt === "string" ? record.loggedAt : "";
+  return { ...record, mealType: mealTypeFromUnknown(record.mealType, loggedAt) };
 }

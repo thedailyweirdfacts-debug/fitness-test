@@ -3,9 +3,10 @@ import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { presentMeal, sampleTitle, type FoodItem } from "../../shared/src";
+import { mealTypeLabel, presentMeal, sampleTitle, type FoodItem, type MealType } from "../../shared/src";
 import { AddFoodForm } from "../src/components/AddFoodForm";
 import { FoodCard } from "../src/components/FoodCard";
+import { MealTypePicker } from "../src/components/MealTypePicker";
 import { confidenceCopy, MacroLine, PlateArt, PrimaryButton } from "../src/components/ui";
 import { confirm } from "../src/lib/confirm";
 import { useApp } from "../src/state/AppContext";
@@ -16,6 +17,7 @@ export default function ResultsScreen() {
   const insets = useSafeAreaInsets();
   const { draft, saveDraft, deleteMeal } = useApp();
   const [items, setItems] = useState<FoodItem[]>(draft?.items ?? []);
+  const [mealType, setMealType] = useState<MealType>(draft?.mealType ?? "snack");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [photoFailed, setPhotoFailed] = useState(false);
@@ -29,6 +31,7 @@ export default function ResultsScreen() {
     if (seen.current !== draft.key) {
       seen.current = draft.key;
       setItems(draft.items);
+      setMealType(draft.mealType);
       setError(null);
       setPhotoFailed(false);
     }
@@ -53,7 +56,7 @@ export default function ResultsScreen() {
     setSaving(true);
     setError(null);
     try {
-      await saveDraft({ ...current, items });
+      await saveDraft({ ...current, items, mealType });
       router.replace("/(tabs)/log");
     } catch {
       setError("Couldn't save this meal on the device.");
@@ -106,6 +109,11 @@ export default function ResultsScreen() {
           ) : null}
         </View>
 
+        <View style={styles.typeBlock}>
+          <Text style={styles.typeLabel}>Meal</Text>
+          <MealTypePicker value={mealType} onChange={setMealType} />
+        </View>
+
         <View style={styles.items}>
           {items.map((item) => (
             <FoodCard
@@ -133,7 +141,11 @@ export default function ResultsScreen() {
             <MacroLine totals={view.totals} compact />
           </View>
         </View>
-        <PrimaryButton label={saving ? "Saving…" : editing ? "Update meal" : "Save to today"} onPress={save} disabled={saving} />
+        <PrimaryButton
+          label={saving ? "Saving…" : editing ? "Update meal" : `Save ${mealTypeLabel(mealType).toLowerCase()}`}
+          onPress={save}
+          disabled={saving}
+        />
       </View>
     </View>
   );
@@ -223,6 +235,14 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 14,
     lineHeight: 20,
+  },
+  typeBlock: {
+    gap: 8,
+  },
+  typeLabel: {
+    color: colors.ink,
+    fontSize: 16,
+    fontWeight: "700",
   },
   items: {
     gap: 12,

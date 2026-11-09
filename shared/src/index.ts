@@ -7,6 +7,7 @@ export {
   macrosSchema,
   mealAnalysisSchema,
   mealSourceSchema,
+  mealTypeSchema,
   modelOutputSchema,
 } from "./schema";
 export type {
@@ -17,8 +18,33 @@ export type {
   Macros,
   MealAnalysis,
   MealSource,
+  MealType,
   ModelOutput,
 } from "./schema";
+
+export {
+  MEAL_TYPES,
+  groupMealsByType,
+  mealTypeForTime,
+  mealTypeFromUnknown,
+  mealTypeLabel,
+  needsMealTypeMigration,
+} from "./meal-type";
+
+export {
+  BADGE_CATALOG,
+  buildRewardReport,
+  calorieGoalHit,
+  clampWindow,
+  dayGoalStatus,
+  freshRewards,
+  goalBounds,
+  markRewardsSeen,
+  parseGoalInput,
+  progressCopy,
+  streakStats,
+} from "./goals";
+export type { Badge, DayGoalStatus, FreshRewards, GoalTargets, RewardReport, SeenRewards } from "./goals";
 
 export {
   MAX_SCALE,

@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { parseGoalInput } from "../../shared/src";
 import { PrimaryButton } from "../src/components/ui";
 import { checkHealth, type HealthReport } from "../src/lib/api";
 import { normalizeApiBaseUrl } from "../src/lib/settings";
@@ -16,6 +17,9 @@ export default function SettingsScreen() {
   const [useDemoMode, setUseDemoMode] = useState(settings.useDemoMode);
   const [apiBaseUrl, setApiBaseUrl] = useState(settings.apiBaseUrl);
   const [appSecret, setAppSecret] = useState(settings.appSecret);
+  const [calorieText, setCalorieText] = useState(settings.calorieGoal?.toString() ?? "");
+  const [proteinText, setProteinText] = useState(settings.proteinGoal?.toString() ?? "");
+  const [goalWindowPercent, setGoalWindowPercent] = useState(settings.goalWindowPercent);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -24,6 +28,9 @@ export default function SettingsScreen() {
     setUseDemoMode(settings.useDemoMode);
     setApiBaseUrl(settings.apiBaseUrl);
     setAppSecret(settings.appSecret);
+    setCalorieText(settings.calorieGoal?.toString() ?? "");
+    setProteinText(settings.proteinGoal?.toString() ?? "");
+    setGoalWindowPercent(settings.goalWindowPercent);
   }, [settings]);
 
   async function save() {
@@ -36,10 +43,27 @@ export default function SettingsScreen() {
       setError("The address should start with http:// or https://.");
       return;
     }
+    const calorieGoal = parseGoalInput(calorieText, 20000);
+    const proteinGoal = parseGoalInput(proteinText, 1000);
+    if (calorieGoal === "invalid") {
+      setError("Use a calorie goal between 1 and 20000, or leave it blank.");
+      return;
+    }
+    if (proteinGoal === "invalid") {
+      setError("Use a protein goal between 1 and 1000 grams, or leave it blank.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      await saveSettings({ useDemoMode, apiBaseUrl: url, appSecret: appSecret.trim() });
+      await saveSettings({
+        useDemoMode,
+        apiBaseUrl: url,
+        appSecret: appSecret.trim(),
+        calorieGoal,
+        proteinGoal,
+        goalWindowPercent,
+      });
       setStatus("Saved.");
     } catch {
       setError("Couldn't save settings on this device.");
@@ -74,6 +98,51 @@ export default function SettingsScreen() {
       <Text style={styles.lead}>
         The Gemini key stays on the server. This app only knows the server address and a shared password, so a stranger cannot spend your free quota.
       </Text>
+
+      <View style={styles.card}>
+        <Text style={styles.rowTitle}>Daily calorie goal</Text>
+        <Text style={styles.rowCopy}>
+          Optional. Leave it blank and the goal stays off. A day counts when the total lands inside the window, so a much larger day does not count.
+        </Text>
+        <TextInput
+          value={calorieText}
+          onChangeText={setCalorieText}
+          keyboardType="number-pad"
+          placeholder="2000"
+          placeholderTextColor={colors.faint}
+          style={styles.input}
+          accessibilityLabel="Daily calorie goal"
+        />
+        <Text style={styles.rowTitle}>Protein goal</Text>
+        <Text style={styles.rowCopy}>Also optional. Meeting it is a bonus, not a requirement for the streak.</Text>
+        <TextInput
+          value={proteinText}
+          onChangeText={setProteinText}
+          keyboardType="number-pad"
+          placeholder="Grams"
+          placeholderTextColor={colors.faint}
+          style={styles.input}
+          accessibilityLabel="Protein goal"
+        />
+        <Text style={styles.rowTitle}>Window</Text>
+        <View style={styles.chips}>
+          {[5, 10, 15, 20].map((percent) => {
+            const selected = goalWindowPercent === percent;
+            return (
+              <Pressable
+                key={percent}
+                accessibilityRole="button"
+                accessibilityLabel={`Within ${percent} percent`}
+                accessibilityState={{ selected }}
+                onPress={() => setGoalWindowPercent(percent)}
+                style={[styles.chip, selected && styles.chipOn]}
+              >
+                <Text style={[styles.chipText, selected && styles.chipTextOn]}>±{percent}%</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
 
       <View style={styles.card}>
         <View style={styles.row}>
@@ -207,6 +276,30 @@ const styles = StyleSheet.create({
   linkText: {
     color: colors.greenDark,
     fontWeight: "700",
+  },
+  chips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  chipOn: {
+    backgroundColor: colors.green,
+    borderColor: colors.green,
+  },
+  chipText: {
+    color: colors.ink,
+    fontWeight: "700",
+  },
+  chipTextOn: {
+    color: colors.white,
   },
   status: {
     color: colors.greenDark,

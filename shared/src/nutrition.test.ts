@@ -129,7 +129,11 @@ describe("portion edits", () => {
       excluded: [],
       source: "sample",
     };
-    expect(parseMealLog([valid, { id: "broken" }, "nope", null])).toEqual([valid]);
+    expect(parseMealLog([valid, { id: "broken" }, "nope", null])).toEqual([{ ...valid, mealType: "lunch" }]);
+    expect(parseMealLog([{ ...valid, loggedAt: "not-a-date" }])[0]?.mealType).toBe("snack");
+    const evening = { ...valid, loggedAt: new Date(2026, 10, 9, 18, 30).toISOString() };
+    expect(parseMealLog([evening])[0]?.mealType).toBe("dinner");
+    expect(parseMealLog([{ ...valid, mealType: "snack" }])[0]?.mealType).toBe("snack");
     expect(parseMealLog({ not: "an array" })).toEqual([]);
   });
 });

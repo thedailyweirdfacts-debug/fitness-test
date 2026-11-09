@@ -190,6 +190,14 @@ Demo mode uses two meals, with the owner's ballpark totals:
 
 These are guesses from a photo, not a lab test and not diet advice.
 
+## Meal types, history, and a daily goal
+
+When you save a plate you pick Breakfast, Lunch, Dinner, or Snack. The app suggests one from the time of day, and you can change it. The log groups that day's meals by type.
+
+History is a calendar of past days. Tap a day for its total, then a meal for the photo, foods, and macros. You can change the type or delete the meal. Older meals that were saved before this update get a type from the time they were logged.
+
+A daily calorie goal is off until you set one in Settings. You can add an optional protein goal and a window (5, 10, 15, or 20 percent, 10 by default). A day counts when calories land inside that window. Going well over does not extend a streak. The app keeps your current streak, your best streak, and a few badges, and shows a small celebration when you earn one. All of this stays on the phone.
+
 ## Layout
 
 - `mobile/` — the Expo app (TypeScript, Expo Router) and `eas.json`
