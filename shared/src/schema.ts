@@ -30,6 +30,14 @@ export const modelOutputSchema = z
     confidence: confidenceSchema,
     notes: z.string().max(500).optional().default(""),
     excluded: z.array(z.string().max(140)).max(8).optional().default([]),
+    barcode: z
+      .preprocess((value) => {
+        if (value == null || value === "") return undefined;
+        if (typeof value === "number" && Number.isFinite(value)) return String(Math.trunc(value));
+        if (typeof value === "string") return value.slice(0, 40);
+        return value;
+      }, z.string().max(40).optional())
+      .default(""),
   })
   .strict();
 

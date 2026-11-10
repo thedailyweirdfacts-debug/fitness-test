@@ -17,7 +17,8 @@ import {
 } from "../../../shared/src";
 import { GoalProgress } from "../../src/components/GoalProgress";
 import { MacroLine, PlateArt } from "../../src/components/ui";
-import { AnalyzeError, analyzeImage, analyzeMealText } from "../../src/lib/api";
+import { BarcodeLookup } from "../../src/components/BarcodeLookup";
+import { AnalyzeError, analyzeImage, analyzeMealText, lookupBarcode } from "../../src/lib/api";
 import { draftFromAnalysis } from "../../src/lib/draft";
 import { preparePlatePhoto } from "../../src/lib/photos";
 import { resolveAppSecret } from "../../src/lib/settings";
@@ -34,6 +35,7 @@ export default function ScanScreen() {
   const [preview, setPreview] = useState<string | null>(null);
   const [writing, setWriting] = useState(false);
   const [mealText, setMealText] = useState("");
+  const [barcodeOpen, setBarcodeOpen] = useState(false);
   const todayKey = dayKeyFromDate(new Date());
   const today = dailyTotals(meals, todayKey);
   const hasToday = meals.some((meal) => dayKeyFromDate(new Date(meal.loggedAt)) === todayKey);
@@ -167,6 +169,47 @@ export default function ScanScreen() {
     }
   }
 
+  async function submitBarcode(raw: string) {
+    setError(null);
+    const code = raw.replace(/\D/g, "");
+    if (code.length < 8 || code.length > 14) {
+      setError("Enter the barcode number, usually 8 to 14 digits.");
+      return;
+    }
+    if (settings.useDemoMode || !settings.apiBaseUrl) {
+      setError("Barcode lookup needs the server. Take a photo of the package instead.");
+      setBarcodeOpen(false);
+      return;
+    }
+    if (!session) {
+      router.push("/auth");
+      return;
+    }
+    setPreview(null);
+    setBusy("Looking up that barcode…");
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
+    }
+    try {
+      const result = await lookupBarcode(
+        settings.apiBaseUrl,
+        code,
+        resolveAppSecret(settings.appSecret),
+        session.accessToken,
+      );
+      if (result.scansRemaining != null) noteScansRemaining(result.scansRemaining);
+      openDraft(draftFromAnalysis(result.analysis, { photoUri: null, source: "vision", sampleId: null }));
+      setBarcodeOpen(false);
+      router.push("/results");
+    } catch (caught) {
+      const message = caught instanceof AnalyzeError ? caught.message : "That barcode could not be looked up.";
+      setError(message);
+      setBarcodeOpen(false);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   function openSample(id: (typeof SAMPLE_ORDER)[number]) {
     setError(null);
     openDraft(
@@ -185,7 +228,7 @@ export default function ScanScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.wordmark}>Plateful</Text>
-            <Text style={styles.tagline}>Snap a plate, or type what you ate.</Text>
+            <Text style={styles.tagline}>Snap a plate, scan a barcode, or type what you ate.</Text>
             {session && !settings.useDemoMode ? (
               <Text style={styles.scans}>
                 {scansRemaining == null ? "Checking free scans…" : `${scansRemaining} free scans left today`}
@@ -266,6 +309,24 @@ export default function ScanScreen() {
           <Text style={styles.galleryText}>Type what you ate</Text>
         </Pressable>
 
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Scan a barcode"
+          disabled={busy !== null}
+          onPress={() => {
+            setError(null);
+            setBarcodeOpen(true);
+          }}
+          style={({ pressed }) => [styles.gallery, pressed && styles.pressed]}
+        >
+          <Ionicons name="barcode-outline" size={18} color={colors.ink} />
+          <Text style={styles.galleryText}>Scan a barcode</Text>
+        </Pressable>
+
+        {barcodeOpen ? (
+          <BarcodeLookup disabled={busy !== null} onLookup={(code) => void submitBarcode(code)} onClose={() => setBarcodeOpen(false)} />
+        ) : null}
+
         {writing ? (
           <View style={styles.composer}>
             <TextInput
@@ -291,11 +352,13 @@ export default function ScanScreen() {
           </View>
         ) : null}
 
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+
         {settings.useDemoMode ? (
           <View style={styles.demo}>
             <Text style={styles.demoTitle}>Demo mode is on</Text>
             <Text style={styles.demoCopy}>
-              Photos and typed meals stay on this phone. You'll get one of two saved example meals so you can try the whole flow. Turn this off in Settings once your server is running.
+              Photos and typed meals stay on this phone. You'll get one of two saved example meals so you can try the whole flow. A barcode needs the server. Turn demo mode off in Settings once your server is running.
             </Text>
             <View style={styles.samples}>
               {SAMPLE_ORDER.map((id) => (
@@ -311,8 +374,6 @@ export default function ScanScreen() {
             </View>
           </View>
         ) : null}
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
       </ScrollView>
 
       {busy ? (

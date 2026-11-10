@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AnalysisError, finalizeAnalysis, type MealAnalysis } from "../../shared/src/index.js";
 import { HttpError, ProviderError } from "./errors.js";
+import { barcodeFromModel, type OffLookup } from "./open-food-facts.js";
 import type { VisionProvider } from "./providers/types.js";
 
 const requestSchema = z.object({
@@ -20,7 +21,11 @@ export const PHOTO_TOO_LARGE_MESSAGE =
 
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
 
-export async function analyzeRequest(body: unknown, provider: VisionProvider | null): Promise<MealAnalysis> {
+export async function analyzeRequest(
+  body: unknown,
+  provider: VisionProvider | null,
+  lookup?: (barcode: string) => Promise<OffLookup>,
+): Promise<MealAnalysis> {
   if (!provider) {
     throw new HttpError(503, "not_configured", "No vision API key is configured on the server.");
   }
@@ -46,6 +51,18 @@ export async function analyzeRequest(body: unknown, provider: VisionProvider | n
 
   try {
     const raw = await provider.analyze({ imageBase64, mimeType });
+    const barcode = barcodeFromModel(raw);
+    if (barcode && lookup) {
+      try {
+        const found = await lookup(barcode);
+        if (found.status === "found") {
+          console.log(`Plateful packaged product ${barcode} from Open Food Facts`);
+          return found.analysis;
+        }
+      } catch {
+        console.log("Plateful barcode lookup failed, using the photo estimate");
+      }
+    }
     return finalizeAnalysis(raw);
   } catch (error) {
     rethrowEstimate(error);

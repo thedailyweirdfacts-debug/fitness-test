@@ -12,7 +12,14 @@ Rules:
 - notes: one or two short sentences on how you judged the portion and what you left out.
 - excluded: short labels for plates, foods, or scraps you deliberately skipped. Use an empty array if nothing was skipped.
 - Do not include totals. Do not include items you excluded.
-- If the main plate has no real food, return an empty items array.`;
+- If the main plate has no real food, return an empty items array.
+- A packaged product counts too: a can, bottle, bag, box, or bar in the foreground. Log the whole container, not one sip or a handful.
+- If a Nutrition Facts label is readable, use those numbers. When the label lists one serving and the package holds several, multiply up to the whole container.
+- If the label is not readable but the brand and size are clear, use that brand's published values for that package. A Red Bull can of 8.4 fl oz is 110 kcal and 27 g sugar.
+- portionLabel should name the package, such as "1 can (8.4 fl oz)" or "1 bag".
+- notes must say whether you read the Nutrition Facts label or used published package values, and the size you assumed.
+- confidence is "high" when the label was readable or the package is unmistakable.
+- barcode is the digits of a barcode you can actually read on the package. Use an empty string when no barcode is readable. Do not guess a barcode.`;
 
 export const USER_PROMPT = "Estimate the main plate in this photo.";
 
@@ -28,7 +35,8 @@ Rules:
 - notes: one or two short sentences on whether you used published numbers or a typical estimate.
 - excluded: parts of the description that are not food. Use an empty array when everything counted.
 - Do not include totals. Do not include items you excluded.
-- If the description is not food, return an empty items array.`;
+- If the description is not food, return an empty items array.
+- For a packaged product, log the whole container the person named (one can, one bag, or one bar) and say the size you assumed.`;
 
 export function textUserPrompt(description: string): string {
   return `Estimate this meal:\n${description}`;

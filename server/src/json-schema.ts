@@ -38,6 +38,10 @@ export const MEAL_JSON_SCHEMA = {
       description: "Things deliberately ignored, such as another person's plate or scraps.",
       items: { type: "string" },
     },
+    barcode: {
+      type: "string",
+      description: "Digits of a barcode printed on a package in the photo. Empty string if none is readable.",
+    },
   },
-  required: ["items", "confidence", "notes", "excluded"],
+  required: ["items", "confidence", "notes", "excluded", "barcode"],
 } as const;

@@ -3,6 +3,14 @@ import { quotaDayKey } from "../../shared/src/account.js";
 import { bearerToken, type QuotaStore, type VerifiedUser } from "./accounts.js";
 import { analyzeRequest, analyzeTextRequest, PHOTO_TOO_LARGE_MESSAGE } from "./analyze.js";
 import { HttpError } from "./errors.js";
+import {
+  lookupOpenFoodFacts,
+  normalizeBarcode,
+  PRODUCT_INVALID_MESSAGE,
+  PRODUCT_MISSING_MESSAGE,
+  PRODUCT_NO_FACTS_MESSAGE,
+  type OffLookup,
+} from "./open-food-facts.js";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.js";
 import { SECRET_HEADER, secretMatches } from "./secret.js";
 import type { ProviderId, VisionProvider } from "./providers/types.js";
@@ -27,6 +35,7 @@ export type ServerOptions = {
   verifyUser?: (token: string) => Promise<VerifiedUser | null>;
   quota?: QuotaStore;
   dailyCap?: number;
+  lookupProduct?: (barcode: string) => Promise<OffLookup>;
 };
 
 export type RequestOutcome = {
@@ -49,6 +58,7 @@ export function createServer(options: ServerOptions): Server {
           return Array.isArray(value) ? value[0] : value;
         },
         ip: clientIp(req),
+        query: url.searchParams,
         readBody: () => readJson(req, bodyLimit),
       });
       send(res, outcome.status, outcome.body, outcome.headers);
@@ -71,6 +81,7 @@ export async function handleRequest(
     pathname: string;
     header: (name: string) => string | undefined;
     ip: string;
+    query: URLSearchParams;
     readBody: () => Promise<unknown>;
   },
 ): Promise<RequestOutcome> {
@@ -90,6 +101,10 @@ export async function handleRequest(
         accounts: Boolean(options.verifyUser && options.quota),
       },
     };
+  }
+
+  if (input.pathname === "/api/product") {
+    return lookupProduct(options, input);
   }
 
   const isPhoto = input.pathname === "/api/analyze";
@@ -147,7 +162,9 @@ export async function handleRequest(
   }
 
   try {
-    const analysis = isText ? await analyzeTextRequest(body, options.provider) : await analyzeRequest(body, options.provider);
+    const analysis = isText
+      ? await analyzeTextRequest(body, options.provider)
+      : await analyzeRequest(body, options.provider, options.lookupProduct ?? lookupOpenFoodFacts);
     return {
       status: 200,
       body: analysis,
@@ -157,6 +174,22 @@ export async function handleRequest(
     await options.quota!.release(user.userId, day).catch(() => undefined);
     throw error;
   }
+}
+
+async function lookupProduct(
+  options: ServerOptions,
+  input: { method: string; header: (name: string) => string | undefined; query: URLSearchParams },
+): Promise<RequestOutcome> {
+  if (input.method !== "GET") {
+    throw new HttpError(405, "method_not_allowed", "Use GET to look up a barcode.");
+  }
+  await requireUser(options, input.header);
+  const barcode = normalizeBarcode(input.query.get("barcode") ?? "");
+  if (!barcode) throw new HttpError(400, "invalid_request", PRODUCT_INVALID_MESSAGE);
+  const result = await (options.lookupProduct ?? lookupOpenFoodFacts)(barcode);
+  if (result.status === "missing") throw new HttpError(404, "not_found", PRODUCT_MISSING_MESSAGE);
+  if (result.status === "no_facts") throw new HttpError(422, "no_food", PRODUCT_NO_FACTS_MESSAGE);
+  return { status: 200, body: result.analysis };
 }
 
 async function requireUser(

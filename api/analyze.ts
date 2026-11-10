@@ -52,6 +52,7 @@ async function dispatch(request: Request | NodeRequest): Promise<RequestOutcome>
       pathname: url.pathname,
       header: (name) => headerValue(request, name),
       ip: headerValue(request, "x-forwarded-for")?.split(",")[0]?.trim() || "unknown",
+      query: url.searchParams,
       readBody: () => parseIncomingBody(request, options.bodyLimit ?? DEFAULT_BODY_LIMIT),
     });
   } catch (error) {

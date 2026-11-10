@@ -1,10 +1,10 @@
 # Plateful
 
-Snap a photo of your plate, or type what you ate, and get a rough calorie and macro estimate. One Expo app runs on iPhone and Android. A small server calls a vision model. The model key stays on the server.
+Snap a photo of your plate, scan a package barcode, or type what you ate, and get a calorie and macro estimate. One Expo app runs on iPhone and Android. A small server calls a vision model. The model key stays on the server. A barcode is looked up in Open Food Facts, which is free and needs no key.
 
 The default model is **Google Gemini 3.8 Flash**, on the free Google AI Studio tier. No credit card. OpenAI and Anthropic still work if you set them later.
 
-Demo mode needs no key. It walks through a photo or a typed meal → results → daily log with two real meals. A typed meal has no photo.
+Demo mode needs no key. It walks through a photo or a typed meal → results → daily log with two real meals. A typed meal has no photo. A barcode lookup needs the server.
 
 ## Do this once, in order (Windows, free, no credit card)
 
@@ -28,7 +28,7 @@ If you already installed an older Plateful APK, do the steps again from the buil
 2. Create an API key. Stay on the **free** tier. Do not add a billing account or a card.
 3. Copy the key. You will paste it into Vercel in step 5. Do not put it in the app, and do not send it to your friend.
 
-On the free tier, Google may use prompts (including photos) to improve its products. That is the trade for the free quota. The free Flash model is about **20 photos a day for the whole Google project**, shared by both of you. The app gives each signed-in person **10 scans a day** so two people fit. The count is on the Scan screen. It resets at midnight Pacific time. Demo mode does not use a scan.
+On the free tier, Google may use prompts (including photos) to improve its products. That is the trade for the free quota. The free Flash model is about **20 photos a day for the whole Google project**, shared by both of you. The app gives each signed-in person **10 scans a day** so two people fit. The count is on the Scan screen. It resets at midnight Pacific time. Demo mode does not use a scan. A barcode lookup does not use a scan either. A photo of a can, bag, or bar still does, and the server reads a Nutrition Facts label when it is visible, or the brand's published values for that package.
 
 ### 3. Create the free Supabase project and run the SQL
 
