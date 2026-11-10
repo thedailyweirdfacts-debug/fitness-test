@@ -231,22 +231,32 @@ When you save a plate you pick Breakfast, Lunch, Dinner, or Snack. The app sugge
 
 History is a calendar of past days. Tap a day for its total, then a meal for the photo, foods, and macros. You can change the type or delete the meal. Older meals that were saved before this update get a type from the time they were logged.
 
-A daily calorie goal is off until you set one in Settings. You can add an optional protein goal and a window (5, 10, 15, or 20 percent, 10 by default). A day counts when calories land inside that window. Going well over does not extend a streak. The app keeps your current streak, your best streak, and a few badges, and shows a small celebration when you earn one. Signed in, those meals, goals, streaks, and badges belong to the account and show up again after a reinstall. Demo mode, with no account, keeps them on the phone.
+A daily calorie goal is off until you set one in Settings. You can add an optional protein goal and a window (5, 10, 15, or 20 percent, 10 by default). A day counts when calories land inside that window. Going well over does not extend a streak.
+
+Logging a meal, hitting the calorie window, reaching a streak milestone, unlocking a badge, and finishing a weekly challenge all earn XP. Levels have titles, and the home screen shows the progress bar. There are 25 badges, with locked and unlocked states on the Badges screen. A full-screen celebration plays the first time you level up, the first time you hit the calorie goal each Pacific day, and when a new badge unlocks. Seen badges and seen goal days from an older install still count, so those celebrations do not play again.
+
+A streak freeze is earned every 7 goal days. You can hold 2. If you miss a day, one freeze is used automatically and the streak stays. Streaks, XP, and the three weekly challenges follow Pacific time, the same clock as the scan cap. Challenges reset on Monday. The home screen shows their progress.
+
+Friends are optional. Each signed-in person gets a short friend code. Both people have to accept. A friend can see your display name, level, weekly XP, and streak. They cannot see meals or calories. That limit is enforced in `supabase/migrations/003_rewards.sql`: row security keeps meal rows private, and the friend board is a security-definer function that returns only those four fields.
+
+Signed in, the server recomputes XP from your saved meals. Saving the same meal again does not add XP twice. The first sync also fills in XP for meals already in the account. Demo mode, with no account, keeps the same XP and badges on the phone. Friend codes need an account. Until you paste `003_rewards.sql` into the Supabase SQL editor, the phone still shows XP locally and the friend screen explains that the database update is waiting.
 
 ## Layout
 
 - `mobile/` — the Expo app (TypeScript, Expo Router) and `eas.json`
-- `server/` — local `GET /api/health`, `GET /api/quota`, and `POST /api/analyze`
+- `server/` — local `GET /api/health`, `GET /api/quota`, `POST /api/analyze`, and `POST /api/rewards`
 - `api/` — the same routes, for Vercel
-- `shared/` — the JSON schema, portion math, goals, and the two sample meals
+- `shared/` — the JSON schema, portion math, goals, rewards, and the two sample meals
 - `supabase/migrations/001_accounts.sql` — paste this into the Supabase SQL Editor once
+- `supabase/migrations/002_recipes.sql` — paste this once, after the accounts file
+- `supabase/migrations/003_rewards.sql` — paste this once, after the recipes file, to turn on XP, badges, and friends
 
 ```bash
 npm test
 npm run typecheck
 ```
 
-Without an account, meals and settings stay on the device with AsyncStorage, and photos stay in the app's documents folder. Signed in, meals, goals, and seen badges are stored in your Supabase project, and meal photos are stored in the private `meal-photos` bucket under that person's folder. The phone still keeps a local copy of a photo so it can show it right away.
+Without an account, meals, settings, and XP stay on the device with AsyncStorage, and photos stay in the app's documents folder. Signed in, meals, goals, seen badges, and the reward profile are stored in your Supabase project, and meal photos are stored in the private `meal-photos` bucket under that person's folder. The phone still keeps a local copy of a photo so it can show it right away. No new server setting is required for rewards. The existing Supabase URL and service key are enough, after `003_rewards.sql` has been run.
 
 ## Shipping to the App Store and Google Play
 

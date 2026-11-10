@@ -40,6 +40,8 @@ function RootNavigator() {
         <Stack.Screen name="recipe" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="auth" />
+        <Stack.Screen name="badges" />
+        <Stack.Screen name="friends" />
       </Stack>
       <RewardHost />
     </View>

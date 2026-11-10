@@ -13,6 +13,7 @@ import {
   type OffLookup,
 } from "./open-food-facts.js";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.js";
+import { rewardPayload, RewardsNotReady, syncRewardUser, type RewardStore } from "./rewards.js";
 import { SECRET_HEADER, secretMatches } from "./secret.js";
 import type { ProviderId, VisionProvider } from "./providers/types.js";
 
@@ -37,6 +38,7 @@ export type ServerOptions = {
   quota?: QuotaStore;
   dailyCap?: number;
   lookupProduct?: (barcode: string) => Promise<OffLookup>;
+  rewards?: RewardStore;
 };
 
 export type RequestOutcome = {
@@ -106,6 +108,10 @@ export async function handleRequest(
 
   if (input.pathname === "/api/product") {
     return lookupProduct(options, input);
+  }
+
+  if (input.pathname === "/api/rewards") {
+    return rewardRequest(options, input);
   }
 
   if (input.pathname === "/api/analyze-recipe") {
@@ -257,9 +263,63 @@ async function lookupProduct(
   return { status: 200, body: result.analysis };
 }
 
+async function rewardRequest(
+  options: ServerOptions,
+  input: {
+    method: string;
+    header: (name: string) => string | undefined;
+    readBody: () => Promise<unknown>;
+  },
+): Promise<RequestOutcome> {
+  if (input.method !== "GET" && input.method !== "POST") {
+    throw new HttpError(405, "method_not_allowed", "Use POST to sync rewards.");
+  }
+  if (!options.rewards) {
+    throw new HttpError(503, "rewards_not_configured", "Set the Supabase URL and service key before rewards can sync.");
+  }
+  const user = await requireUser(options, input.header, "Sign in again, then open rewards.");
+  const body = input.method === "POST" ? await input.readBody() : {};
+  const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+  const action = typeof record.action === "string" ? record.action : "sync";
+
+  try {
+    if (action === "rename") {
+      const result = await options.rewards.rename(user.userId, typeof record.displayName === "string" ? record.displayName : "");
+      if (!result.ok) return { status: 400, body: { error: "friend", message: result.message } };
+    } else if (action === "request") {
+      const result = await options.rewards.requestFriend(user.userId, typeof record.code === "string" ? record.code : "");
+      if (!result.ok) return { status: 400, body: { error: "friend", message: result.message } };
+    } else if (action === "respond") {
+      const result = await options.rewards.respond(
+        user.userId,
+        typeof record.id === "string" ? record.id : "",
+        record.accept === true,
+      );
+      if (!result.ok) return { status: 400, body: { error: "friend", message: result.message } };
+    } else if (action !== "sync") {
+      throw new HttpError(400, "invalid_request", "That reward action is not recognized.");
+    }
+
+    const snapshot = await syncRewardUser(options.rewards, user.userId);
+    const social = await options.rewards.social(user.userId);
+    return { status: 200, body: rewardPayload(snapshot, social) };
+  } catch (error) {
+    if (error instanceof RewardsNotReady) {
+      throw new HttpError(
+        503,
+        "rewards_not_ready",
+        "Run supabase/migrations/003_rewards.sql in the Supabase SQL editor, then open the app again.",
+      );
+    }
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(503, "rewards_unavailable", "Rewards could not be saved just now. Your log is still here.");
+  }
+}
+
 async function requireUser(
   options: ServerOptions,
   header: (name: string) => string | undefined,
+  message = "Sign in again, then retry the photo.",
 ): Promise<VerifiedUser> {
   if (!options.verifyUser || !options.quota) {
     throw new HttpError(503, "accounts_not_configured", "Set the Supabase URL and keys on the server before it will estimate meals.");
@@ -267,7 +327,7 @@ async function requireUser(
   const token = bearerToken(header("authorization"));
   const user = token ? await options.verifyUser(token) : null;
   if (!user) {
-    throw new HttpError(401, "unauthorized", "Sign in again, then retry the photo.");
+    throw new HttpError(401, "unauthorized", message);
   }
   const secret = options.appSecret?.trim() ?? "";
   if (secret && !secretMatches(header(SECRET_HEADER) ?? "", secret)) {

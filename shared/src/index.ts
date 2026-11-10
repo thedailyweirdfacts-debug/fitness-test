@@ -3,6 +3,7 @@ export {
   analysisItemSchema,
   confidenceSchema,
   foodItemSchema,
+  logKindSchema,
   loggedMealSchema,
   macrosSchema,
   mealAnalysisSchema,
@@ -18,6 +19,7 @@ export type {
   LoggedMeal,
   Macros,
   MealAnalysis,
+  LogKind,
   MealSource,
   MealType,
   ModelOutput,
@@ -47,6 +49,40 @@ export {
   streakStats,
 } from "./goals.js";
 export type { Badge, DayGoalStatus, FreshRewards, GoalTargets, RewardReport, SeenRewards } from "./goals.js";
+
+export {
+  applyFriendRequest,
+  BADGE_XP,
+  CHALLENGE_XP,
+  challengesForWeek,
+  cleanDisplayName,
+  evaluateRewards,
+  GOAL_DAY_XP,
+  inferLogKind,
+  levelProgress,
+  levelTitle,
+  MAX_FREEZES,
+  MEAL_XP,
+  mondayOf,
+  normalizeFriendCode,
+  REWARD_BADGE_COUNT,
+  respondToFriend,
+  shiftDay,
+  STREAK_MILESTONES,
+  streakWithFreezes,
+  toRewardView,
+  xpForLevel,
+} from "./rewards.js";
+export type {
+  ChallengeView,
+  FriendBoardEntry,
+  FriendRequestRow,
+  Friendship,
+  RewardBadge,
+  RewardSnapshot,
+  RewardView,
+  XpEvent,
+} from "./rewards.js";
 
 export { DEFAULT_SCAN_CAP, migrationPlan, parseAuthCallback, quotaDayKey } from "./account.js";
 export type { AuthCallback } from "./account.js";

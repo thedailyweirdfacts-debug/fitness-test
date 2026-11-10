@@ -1,4 +1,10 @@
-import { mealAnalysisSchema, type MealAnalysis } from "../../../shared/src";
+import {
+  mealAnalysisSchema,
+  type FriendBoardEntry,
+  type FriendRequestRow,
+  type MealAnalysis,
+  type RewardView,
+} from "../../../shared/src";
 
 export type HealthReport = {
   ok: boolean;
@@ -243,6 +249,46 @@ function scansRemaining(response: Response): number | null {
   if (raw == null || raw === "") return null;
   const parsed = Number(raw);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+export type RewardPayload = {
+  rewards: RewardView;
+  friendCode: string;
+  displayName: string;
+  board: FriendBoardEntry[];
+  requests: FriendRequestRow[];
+};
+
+export async function postRewards(
+  baseUrl: string,
+  accessToken: string,
+  appSecret: string,
+  body: Record<string, unknown>,
+): Promise<RewardPayload> {
+  if (!baseUrl.trim() || !accessToken) {
+    throw new AnalyzeError("Sign in again, then open rewards.", "server");
+  }
+  let response: Response;
+  try {
+    response = await fetch(endpoint(baseUrl, "/api/rewards"), {
+      method: "POST",
+      headers: authHeaders(appSecret, accessToken, true),
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new AnalyzeError("Couldn't reach the server.", "network");
+  }
+  const payload = await readJson(response);
+  if (!response.ok) {
+    const message = payload && typeof payload.message === "string" ? payload.message : "Rewards could not sync.";
+    if (response.status === 503) throw new AnalyzeError(message, "not_configured");
+    throw new AnalyzeError(message, "server");
+  }
+  const rewards = payload?.rewards as { xp?: unknown } | undefined;
+  if (!payload || typeof rewards?.xp !== "number" || !Array.isArray(payload.board) || !Array.isArray(payload.requests)) {
+    throw new AnalyzeError("Rewards came back in an unexpected shape.", "bad_response");
+  }
+  return payload as unknown as RewardPayload;
 }
 
 export async function checkHealth(baseUrl: string): Promise<HealthReport> {

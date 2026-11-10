@@ -32,6 +32,7 @@ export default function FoodsScreen() {
         notes: portion.notes,
         excluded: [],
         source: "recipe",
+        logKind: "recipe",
         sampleId: null,
         editingId: null,
         loggedAt: null,

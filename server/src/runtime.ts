@@ -1,5 +1,6 @@
 import { createProvider, resolveVisionConfig } from "./config.js";
 import { createSupabaseQuota, scanCap, verifySupabaseUser } from "./accounts.js";
+import { createSupabaseRewardStore } from "./rewards.js";
 import { createRateLimiter, readLimit, type RateLimiter } from "./rate-limit.js";
 import type { ServerOptions } from "./server.js";
 
@@ -19,6 +20,7 @@ export function runtimeOptions(env: NodeJS.ProcessEnv = process.env): ServerOpti
     dailyCap: scanCap(env.SCAN_DAILY_CAP),
     verifyUser: supabaseUrl && anonKey ? (token) => verifySupabaseUser(token, { url: supabaseUrl, anonKey }) : undefined,
     quota: supabaseUrl && serviceKey ? createSupabaseQuota({ url: supabaseUrl, serviceKey }) : undefined,
+    rewards: supabaseUrl && serviceKey ? createSupabaseRewardStore({ url: supabaseUrl, serviceKey }) : undefined,
   };
 }
 
