@@ -46,6 +46,9 @@ export async function analyzeRequest(body: unknown, provider: VisionProvider | n
       throw new HttpError(status, error.code, error.message);
     }
     if (error instanceof ProviderError) {
+      if (error.status === 503) {
+        throw new HttpError(503, "provider_busy", error.message);
+      }
       throw new HttpError(502, "provider_error", error.message);
     }
     throw error;

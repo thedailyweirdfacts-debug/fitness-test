@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createProvider, resolveVisionConfig } from "./config.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
 import { extractJson } from "./json.js";
+import { createGeminiProvider, GEMINI_RETRY_DELAY_MS, SCANNER_BUSY_MESSAGE } from "./providers/gemini.js";
 
 const apple = {
   items: [
@@ -35,6 +36,13 @@ describe("vision config", () => {
     expect(
       resolveVisionConfig({ VISION_PROVIDER: "gemini", VISION_MODEL: "gemini-3.5-flash-lite", GEMINI_API_KEY: "g" }).model,
     ).toBe("gemini-3.5-flash-lite");
+    expect(resolveVisionConfig({}).fallbackModels).toEqual(["gemini-3.6-flash", "gemini-3.5-flash-lite"]);
+    expect(resolveVisionConfig({ VISION_MODEL: "gemini-3.6-flash" }).fallbackModels).toEqual(["gemini-3.5-flash-lite"]);
+    expect(
+      resolveVisionConfig({ VISION_FALLBACK_MODELS: "gemini-3.1-flash-lite, gemini-3.5-flash-lite" }).fallbackModels,
+    ).toEqual(["gemini-3.1-flash-lite", "gemini-3.5-flash-lite"]);
+    expect(resolveVisionConfig({ VISION_FALLBACK_MODELS: "" }).fallbackModels).toEqual([]);
+    expect(resolveVisionConfig({ VISION_PROVIDER: "openai", OPENAI_API_KEY: "sk" }).fallbackModels).toEqual([]);
     expect(createProvider(resolveVisionConfig({}))).toBeNull();
   });
 });
@@ -131,6 +139,99 @@ describe("gemini provider", () => {
       async () => new Response(JSON.stringify({ error: { message: "bad key AIza-test-secret" } }), { status: 400 }),
     );
     await expect(provider?.analyze({ imageBase64: "cccc", mimeType: "image/jpeg" })).rejects.toThrow("[redacted]");
+  });
+
+  it("retries a busy primary once, then uses the backup that answers", async () => {
+    const urls: string[] = [];
+    const sleeps: number[] = [];
+    const logs: string[] = [];
+    const provider = createGeminiProvider({
+      apiKey: "AIza-test-secret",
+      model: "gemini-3.8-flash",
+      fallbackModels: ["gemini-3.6-flash", "gemini-3.5-flash-lite"],
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+      fetchImpl: async (url) => {
+        urls.push(url);
+        if (urls.length < 3) {
+          return new Response(
+            JSON.stringify({
+              error: {
+                message: "This model is currently experiencing high demand. Please try again later.",
+                status: "UNAVAILABLE",
+              },
+            }),
+            { status: 503 },
+          );
+        }
+        return new Response(
+          JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(apple) }] } }] }),
+          { status: 200 },
+        );
+      },
+    });
+    const spy = console.log;
+    console.log = (...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    };
+    try {
+      await expect(provider.analyze({ imageBase64: "cccc", mimeType: "image/jpeg" })).resolves.toEqual(apple);
+    } finally {
+      console.log = spy;
+    }
+    expect(urls.map((url) => url.split("/models/")[1]?.split(":")[0])).toEqual([
+      "gemini-3.8-flash",
+      "gemini-3.8-flash",
+      "gemini-3.6-flash",
+    ]);
+    expect(sleeps).toEqual([GEMINI_RETRY_DELAY_MS]);
+    expect(GEMINI_RETRY_DELAY_MS).toBeGreaterThanOrEqual(500);
+    expect(GEMINI_RETRY_DELAY_MS).toBeLessThanOrEqual(1000);
+    expect(logs.some((line) => line.includes("Plateful vision answer from gemini-3.6-flash"))).toBe(true);
+  });
+
+  it("returns a friendly 503 when every model is busy", async () => {
+    const urls: string[] = [];
+    const provider = createGeminiProvider({
+      apiKey: "AIza-test-secret",
+      model: "gemini-3.8-flash",
+      fallbackModels: ["gemini-3.6-flash", "gemini-3.5-flash-lite"],
+      sleep: async () => undefined,
+      fetchImpl: async (url) => {
+        urls.push(url);
+        const status = urls.length % 2 === 0 ? 429 : 503;
+        return new Response(
+          JSON.stringify({ error: { message: "Resource exhausted", status: "RESOURCE_EXHAUSTED" } }),
+          { status },
+        );
+      },
+    });
+    await expect(provider.analyze({ imageBase64: "cccc", mimeType: "image/jpeg" })).rejects.toMatchObject({
+      status: 503,
+      message: SCANNER_BUSY_MESSAGE,
+    });
+    expect(urls).toHaveLength(4);
+  });
+
+  it("does not fall back on a non-busy error", async () => {
+    let calls = 0;
+    const provider = createGeminiProvider({
+      apiKey: "AIza-test-secret",
+      model: "gemini-3.8-flash",
+      fallbackModels: ["gemini-3.6-flash"],
+      sleep: async () => {
+        throw new Error("should not wait");
+      },
+      fetchImpl: async () => {
+        calls += 1;
+        return new Response(JSON.stringify({ error: { message: "Request payload is invalid" } }), { status: 400 });
+      },
+    });
+    await expect(provider.analyze({ imageBase64: "cccc", mimeType: "image/jpeg" })).rejects.toThrow(
+      "Request payload is invalid",
+    );
+    expect(calls).toBe(1);
   });
 });
 
