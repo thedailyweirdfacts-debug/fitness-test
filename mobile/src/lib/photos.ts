@@ -1,7 +1,8 @@
 import { Directory, File, Paths } from "expo-file-system";
 import { ImageManipulator, SaveFormat } from "expo-image-manipulator";
 
-const MAX_EDGE = 1280;
+const MAX_EDGE = 1024;
+const JPEG_QUALITY = 0.6;
 const MAX_DATA_URI = 500_000;
 
 export type PreparedPhoto = {
@@ -10,14 +11,19 @@ export type PreparedPhoto = {
   mimeType: "image/jpeg";
 };
 
-export async function preparePlatePhoto(uri: string, width?: number | null): Promise<PreparedPhoto> {
+export async function preparePlatePhoto(
+  uri: string,
+  width?: number | null,
+  height?: number | null,
+): Promise<PreparedPhoto> {
   const context = ImageManipulator.manipulate(uri);
   try {
-    if (!width || width > MAX_EDGE) context.resize({ width: MAX_EDGE });
+    const resize = resizeToLongestSide(width, height);
+    if (resize) context.resize(resize);
     const rendered = await context.renderAsync();
     try {
       const saved = await rendered.saveAsync({
-        compress: 0.7,
+        compress: JPEG_QUALITY,
         format: SaveFormat.JPEG,
         base64: true,
       });
@@ -55,6 +61,23 @@ export function deleteStoredPhoto(uri: string | null): void {
   } catch {
     // A missing photo should not block deleting the log entry.
   }
+}
+
+/** Scale so the longest side is about 1024px. An unknown size still caps the width. */
+export function resizeToLongestSide(
+  width?: number | null,
+  height?: number | null,
+): { width: number } | { height: number } | null {
+  const w = width && width > 0 ? width : 0;
+  const h = height && height > 0 ? height : 0;
+  if (w && h) {
+    if (Math.max(w, h) <= MAX_EDGE) return null;
+    return w >= h ? { width: MAX_EDGE } : { height: MAX_EDGE };
+  }
+  if (w > MAX_EDGE) return { width: MAX_EDGE };
+  if (h > MAX_EDGE) return { height: MAX_EDGE };
+  if (!w && !h) return { width: MAX_EDGE };
+  return null;
 }
 
 function release(value: { release?: () => void }): void {

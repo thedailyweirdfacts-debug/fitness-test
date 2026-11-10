@@ -88,7 +88,7 @@ export default function ScanScreen() {
       let photoUri = asset.uri;
       let prepared: Awaited<ReturnType<typeof preparePlatePhoto>> | null = null;
       try {
-        prepared = await preparePlatePhoto(asset.uri, asset.width);
+        prepared = await preparePlatePhoto(asset.uri, asset.width, asset.height);
         photoUri = prepared.uri;
         setPreview(photoUri);
       } catch {
