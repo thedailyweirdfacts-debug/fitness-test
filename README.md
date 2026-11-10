@@ -14,7 +14,7 @@ If you already installed an older Plateful APK, do the steps again from the buil
 
 **Why Supabase.** One free project covers email sign-up, password reset, the database, and private photo storage. The free plan does not ask for a card. Paid plans do, so stay on Free. A free project pauses after a week with no traffic. Open the project in the Supabase dashboard and restore it. That does not charge you. The database holds 500 MB, file storage holds 1 GB, and about 50,000 people a month can sign in. That is plenty for two people.
 
-**Why photos go in the account.** A 1280px JPEG from this app is a few hundred kilobytes. The free 1 GB bucket holds thousands of them. The bucket is private: each person can only open photos in their own folder. Keeping photos only on the phone would lose them on a reinstall, which defeats the account.
+**Why photos go in the account.** A 1024px JPEG from this app is a few hundred kilobytes. The free 1 GB bucket holds thousands of them. The bucket is private: each person can only open photos in their own folder. Keeping photos only on the phone would lose them on a reinstall, which defeats the account.
 
 ### 1. Merge the pull request
 
@@ -140,7 +140,7 @@ These are the limits that matter. They change, and going over them pauses the fe
 
 **Gemini 3.8 Flash (free, checked November 2026).** About **5 requests a minute** and **20 requests a day** per Google project, plus a token cap. The day resets at midnight Pacific time. A second API key in the same project does not add more. Google's own page says the exact numbers can vary: look at the rate limits inside [Google AI Studio](https://aistudio.google.com/). If 20 photos a day is too few, set `VISION_MODEL` to `gemini-3.5-flash-lite` (about 500 a day on the free tier) and raise `RATE_LIMIT_PER_DAY` to match. Do not turn on billing.
 
-**This server.** Each signed-in person gets **10 scans a day** (`SCAN_DAILY_CAP`), counted in Supabase so it holds on Vercel. A failed estimate is refunded. There is also a burst brake of 5 scans a minute per address (`RATE_LIMIT_PER_MINUTE`). Photos are kept under Vercel's **4.5 MB** request limit. The app already shrinks each photo to a 1280px JPEG before sending it.
+**This server.** Each signed-in person gets **10 scans a day** (`SCAN_DAILY_CAP`), counted in Supabase so it holds on Vercel. A failed estimate is refunded. There is also a burst brake of 5 scans a minute per address (`RATE_LIMIT_PER_MINUTE`). Photos are kept under Vercel's **4.5 MB** request limit. The app already shrinks each photo to a 1024px JPEG before sending it.
 
 **Supabase Free.** No card. Two active projects, 500 MB of database, 1 GB of file storage, 50 MB per file, and about 50,000 monthly active sign-ins. A project with no traffic for a week pauses. Restore it from the dashboard for free. There are no daily backups on the free plan.
 

@@ -1,7 +1,7 @@
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { quotaDayKey } from "../../shared/src/account.js";
 import { bearerToken, type QuotaStore, type VerifiedUser } from "./accounts.js";
-import { analyzeRequest } from "./analyze.js";
+import { analyzeRequest, PHOTO_TOO_LARGE_MESSAGE } from "./analyze.js";
 import { HttpError } from "./errors.js";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.js";
 import { SECRET_HEADER, secretMatches } from "./secret.js";
@@ -187,7 +187,7 @@ async function readJson(req: IncomingMessage, limit: number): Promise<unknown> {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.length;
     if (size > limit) {
-      throw new HttpError(413, "payload_too_large", "That photo is too large. Try again after it has been resized.");
+      throw new HttpError(413, "payload_too_large", PHOTO_TOO_LARGE_MESSAGE);
     }
     chunks.push(buffer);
   }

@@ -10,6 +10,9 @@ const requestSchema = z
   })
   .strict();
 
+export const PHOTO_TOO_LARGE_MESSAGE =
+  "That photo is too large to upload. Take it again so the app can shrink it, or choose a smaller picture.";
+
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
 
 export async function analyzeRequest(body: unknown, provider: VisionProvider | null): Promise<MealAnalysis> {
@@ -19,6 +22,10 @@ export async function analyzeRequest(body: unknown, provider: VisionProvider | n
 
   const parsed = requestSchema.safeParse(body);
   if (!parsed.success) {
+    const oversized = parsed.error.issues.some((issue) => issue.code === "too_big" && issue.path[0] === "imageBase64");
+    if (oversized) {
+      throw new HttpError(413, "payload_too_large", PHOTO_TOO_LARGE_MESSAGE);
+    }
     throw new HttpError(400, "invalid_request", "Send a JSON body with imageBase64 and mimeType.");
   }
 

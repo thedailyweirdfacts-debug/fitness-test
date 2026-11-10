@@ -1,3 +1,4 @@
+import { PHOTO_TOO_LARGE_MESSAGE } from "../server/src/analyze.js";
 import { HttpError } from "../server/src/errors.js";
 import { createRateLimiter } from "../server/src/rate-limit.js";
 import { runtimeOptions } from "../server/src/runtime.js";
@@ -51,7 +52,7 @@ async function dispatch(request: Request | NodeRequest): Promise<RequestOutcome>
       pathname: url.pathname,
       header: (name) => headerValue(request, name),
       ip: headerValue(request, "x-forwarded-for")?.split(",")[0]?.trim() || "unknown",
-      readBody: () => readBody(request, options.bodyLimit ?? DEFAULT_BODY_LIMIT),
+      readBody: () => parseIncomingBody(request, options.bodyLimit ?? DEFAULT_BODY_LIMIT),
     });
   } catch (error) {
     if (error instanceof HttpError) {
@@ -87,10 +88,39 @@ function firstHeader(value: string | string[] | undefined): string | undefined {
   return value || undefined;
 }
 
-async function readBody(request: Request | NodeRequest, limit: number): Promise<unknown> {
+/**
+ * Vercel parses JSON into `req.body` and consumes the stream. Use that value
+ * when it is an object, a string, or a Buffer. Read the stream only when
+ * `body` is undefined.
+ */
+export async function parseIncomingBody(request: Request | NodeRequest, limit: number): Promise<unknown> {
+  if (!isWebRequest(request) && request.body !== undefined) {
+    return decodePresentBody(request.body, limit);
+  }
   if (isWebRequest(request)) return readWebBody(request, limit);
-  if (request.body !== undefined && typeof request.body !== "string") return request.body;
-  if (typeof request.body === "string") return parseJson(request.body, limit);
+  return readNodeStream(request, limit);
+}
+
+function decodePresentBody(body: unknown, limit: number): unknown {
+  if (typeof body === "string") return parseJson(body, limit);
+  if (Buffer.isBuffer(body) || body instanceof Uint8Array) {
+    return parseJson(Buffer.from(body).toString("utf8"), limit);
+  }
+  const size = jsonSize(body);
+  if (size > limit) throw new HttpError(413, "payload_too_large", PHOTO_TOO_LARGE_MESSAGE);
+  return body;
+}
+
+function jsonSize(body: unknown): number {
+  if (body === null || typeof body !== "object") return 0;
+  try {
+    return Buffer.byteLength(JSON.stringify(body));
+  } catch {
+    return 0;
+  }
+}
+
+async function readNodeStream(request: NodeRequest, limit: number): Promise<unknown> {
   if (typeof request[Symbol.asyncIterator] !== "function") {
     throw new HttpError(400, "invalid_json", "Request body must be JSON.");
   }
@@ -99,9 +129,7 @@ async function readBody(request: Request | NodeRequest, limit: number): Promise<
   for await (const chunk of request as AsyncIterable<Uint8Array | string>) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     size += buffer.length;
-    if (size > limit) {
-      throw new HttpError(413, "payload_too_large", "That photo is too large. Try again after it has been resized.");
-    }
+    if (size > limit) throw new HttpError(413, "payload_too_large", PHOTO_TOO_LARGE_MESSAGE);
     chunks.push(buffer);
   }
   if (chunks.length === 0) throw new HttpError(400, "invalid_json", "Request body must be JSON.");
@@ -111,11 +139,11 @@ async function readBody(request: Request | NodeRequest, limit: number): Promise<
 async function readWebBody(request: Request, limit: number): Promise<unknown> {
   const declared = Number(request.headers.get("content-length") ?? "0");
   if (Number.isFinite(declared) && declared > limit) {
-    throw new HttpError(413, "payload_too_large", "That photo is too large. Try again after it has been resized.");
+    throw new HttpError(413, "payload_too_large", PHOTO_TOO_LARGE_MESSAGE);
   }
   const buffer = Buffer.from(await request.arrayBuffer());
   if (buffer.length > limit) {
-    throw new HttpError(413, "payload_too_large", "That photo is too large. Try again after it has been resized.");
+    throw new HttpError(413, "payload_too_large", PHOTO_TOO_LARGE_MESSAGE);
   }
   if (buffer.length === 0) throw new HttpError(400, "invalid_json", "Request body must be JSON.");
   return parseJson(buffer.toString("utf8"), limit);
@@ -123,7 +151,7 @@ async function readWebBody(request: Request, limit: number): Promise<unknown> {
 
 function parseJson(text: string, limit: number): unknown {
   if (Buffer.byteLength(text) > limit) {
-    throw new HttpError(413, "payload_too_large", "That photo is too large. Try again after it has been resized.");
+    throw new HttpError(413, "payload_too_large", PHOTO_TOO_LARGE_MESSAGE);
   }
   try {
     return JSON.parse(text);
