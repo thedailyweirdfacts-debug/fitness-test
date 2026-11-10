@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { Server } from "node:http";
+import { quotaDayKey } from "../../shared/src/account.js";
 import { createMemoryQuota, type QuotaStore } from "./accounts.js";
 import { ProviderError } from "./errors.js";
 import { createRateLimiter } from "./rate-limit.js";
 import { TEXT_NO_FOOD_MESSAGE } from "./analyze.js";
+import { PRODUCT_INVALID_MESSAGE, PRODUCT_MISSING_MESSAGE, type OffLookup } from "./open-food-facts.js";
 import { createGeminiProvider, SCANNER_BUSY_MESSAGE } from "./providers/gemini.js";
 import { createServer } from "./server.js";
 import type { VisionProvider } from "./providers/types.js";
@@ -52,6 +54,7 @@ describe("POST /api/analyze", () => {
       dailyCap?: number;
       accounts?: boolean;
       quota?: QuotaStore;
+      lookupProduct?: (barcode: string) => Promise<OffLookup>;
     },
   ) {
     const accounts = extra?.accounts !== false;
@@ -67,6 +70,7 @@ describe("POST /api/analyze", () => {
         ? async (token) => (token === "user-a" || token === "user-b" ? { userId: token } : null)
         : undefined,
       quota: accounts ? (extra?.quota ?? createMemoryQuota()) : undefined,
+      lookupProduct: extra?.lookupProduct,
     });
     servers.push(server);
     const port = await listen(server);
@@ -85,6 +89,31 @@ describe("POST /api/analyze", () => {
     if (token) headers.Authorization = `Bearer ${token}`;
     return fetch(`${base}${path}`, { method: "POST", headers, body });
   }
+
+  function get(base: string, path: string, token: string | null = "user-a", secret: string | null = SECRET) {
+    const headers: Record<string, string> = {};
+    if (secret) headers["x-plateful-secret"] = secret;
+    if (token) headers.Authorization = `Bearer ${token}`;
+    return fetch(`${base}${path}`, { headers });
+  }
+
+  const canned = {
+    items: [
+      {
+        name: "Red Bull Energy Drink",
+        grams: 250,
+        portionLabel: "1 package (250 ml)",
+        calories: 110,
+        protein: 0,
+        carbs: 27,
+        fat: 0,
+      },
+    ],
+    totals: { calories: 110, protein: 0, carbs: 27, fat: 0 },
+    confidence: "high" as const,
+    notes: "Open Food Facts for the whole package (250 ml). 27 g sugar.",
+    excluded: [] as string[],
+  };
 
   it("reports health without a key and refuses to estimate", async () => {
     const base = await start(null);
@@ -420,5 +449,58 @@ describe("POST /api/analyze", () => {
       headers: { Authorization: "Bearer user-a", "x-plateful-secret": SECRET },
     });
     expect(await quota.json()).toEqual({ used: 1, remaining: 1, limit: 2 });
+  });
+
+  it("looks up a barcode without using a Gemini scan", async () => {
+    const quota = createMemoryQuota();
+    const base = await start(providerReturning(apple), {
+      quota,
+      dailyCap: 1,
+      lookupProduct: async () => ({ status: "found", analysis: canned }),
+    });
+    const found = await get(base, "/api/product?barcode=9002490100070");
+    expect(found.status).toBe(200);
+    expect(await found.json()).toMatchObject({ totals: { calories: 110, carbs: 27 } });
+    expect(await quota.status("user-a", quotaDayKey(new Date()), 1)).toEqual({ used: 0, remaining: 1, limit: 1 });
+
+    const photo = await post(base, JSON.stringify({ imageBase64: "a".repeat(40), mimeType: "image/jpeg" }));
+    expect(photo.status).toBe(200);
+    expect(await quota.status("user-a", quotaDayKey(new Date()), 1)).toEqual({ used: 1, remaining: 0, limit: 1 });
+  });
+
+  it("refuses a barcode lookup without a sign-in, and a code that is not a barcode", async () => {
+    const base = await start(providerReturning(apple), {
+      lookupProduct: async () => ({ status: "found", analysis: canned }),
+    });
+    const anonymous = await get(base, "/api/product?barcode=9002490100070", null, null);
+    expect(anonymous.status).toBe(401);
+
+    const invalid = await get(base, "/api/product?barcode=123");
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toMatchObject({ message: PRODUCT_INVALID_MESSAGE });
+
+    const missing = await start(providerReturning(apple), {
+      lookupProduct: async () => ({ status: "missing" }),
+    });
+    const notFound = await get(missing, "/api/product?barcode=00000000");
+    expect(notFound.status).toBe(404);
+    expect(await notFound.json()).toMatchObject({ message: PRODUCT_MISSING_MESSAGE });
+  });
+
+  it("uses Open Food Facts when a photo includes a readable barcode", async () => {
+    let lookedUp = "";
+    const base = await start(
+      providerReturning({ ...apple, barcode: "9002490100070", calories: 1 }),
+      {
+        lookupProduct: async (barcode) => {
+          lookedUp = barcode;
+          return { status: "found", analysis: canned };
+        },
+      },
+    );
+    const response = await post(base, JSON.stringify({ imageBase64: "a".repeat(40), mimeType: "image/jpeg" }));
+    expect(response.status).toBe(200);
+    expect(lookedUp).toBe("9002490100070");
+    expect(await response.json()).toMatchObject({ totals: { calories: 110 } });
   });
 });

@@ -47,6 +47,29 @@ describe("finalizeAnalysis", () => {
     expect(analysis.excluded).toEqual(["a smear of sauce"]);
   });
 
+  it("keeps a readable package barcode out of the saved meal", () => {
+    const analysis = finalizeAnalysis({
+      items: [
+        {
+          name: "Red Bull Energy Drink",
+          grams: 250,
+          portionLabel: "1 can (8.4 fl oz)",
+          calories: 110,
+          protein: 0,
+          carbs: 27,
+          fat: 0,
+        },
+      ],
+      confidence: "high",
+      notes: "Published package values for one 8.4 fl oz can.",
+      excluded: [],
+      barcode: "9002490100070",
+    });
+
+    expect(analysis.totals).toEqual({ calories: 110, protein: 0, carbs: 27, fat: 0 });
+    expect(analysis).not.toHaveProperty("barcode");
+  });
+
   it("rejects an empty plate and a payload that is not the schema", () => {
     expect(() =>
       finalizeAnalysis({

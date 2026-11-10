@@ -12,6 +12,9 @@
     },
     "api/quota.ts": {
       "maxDuration": 10
+    },
+    "api/product.ts": {
+      "maxDuration": 10
     }
   }
 }

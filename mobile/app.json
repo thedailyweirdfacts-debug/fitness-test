@@ -11,7 +11,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.plateful.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "Plateful uses the camera to estimate what's on your plate.",
+        "NSCameraUsageDescription": "Plateful uses the camera to photograph a plate or scan a package barcode.",
         "NSPhotoLibraryUsageDescription": "Plateful uses your photos so you can log a meal from a picture you already took."
       }
     },
@@ -35,7 +35,14 @@
         "expo-image-picker",
         {
           "photosPermission": "Plateful uses your photos so you can log a meal from a picture you already took.",
-          "cameraPermission": "Plateful uses the camera to estimate what's on your plate."
+          "cameraPermission": "Plateful uses the camera to photograph a plate or scan a package barcode."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Plateful uses the camera to photograph a plate or scan a package barcode.",
+          "recordAudioAndroid": false
         }
       ],
       [
