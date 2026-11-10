@@ -9,7 +9,7 @@ export {
   mealSourceSchema,
   mealTypeSchema,
   modelOutputSchema,
-} from "./schema";
+} from "./schema.js";
 export type {
   AnalysisItem,
   Confidence,
@@ -20,7 +20,7 @@ export type {
   MealSource,
   MealType,
   ModelOutput,
-} from "./schema";
+} from "./schema.js";
 
 export {
   MEAL_TYPES,
@@ -29,7 +29,7 @@ export {
   mealTypeFromUnknown,
   mealTypeLabel,
   needsMealTypeMigration,
-} from "./meal-type";
+} from "./meal-type.js";
 
 export {
   BADGE_CATALOG,
@@ -43,11 +43,11 @@ export {
   parseGoalInput,
   progressCopy,
   streakStats,
-} from "./goals";
-export type { Badge, DayGoalStatus, FreshRewards, GoalTargets, RewardReport, SeenRewards } from "./goals";
+} from "./goals.js";
+export type { Badge, DayGoalStatus, FreshRewards, GoalTargets, RewardReport, SeenRewards } from "./goals.js";
 
-export { DEFAULT_SCAN_CAP, migrationPlan, parseAuthCallback, quotaDayKey } from "./account";
-export type { AuthCallback } from "./account";
+export { DEFAULT_SCAN_CAP, migrationPlan, parseAuthCallback, quotaDayKey } from "./account.js";
+export type { AuthCallback } from "./account.js";
 
 export {
   MAX_SCALE,
@@ -66,10 +66,10 @@ export {
   sumMacros,
   withGrams,
   withScale,
-} from "./nutrition";
-export type { PresentedItem } from "./nutrition";
+} from "./nutrition.js";
+export type { PresentedItem } from "./nutrition.js";
 
-export { EMPTY_MACROS, addDays, dailyTotals, dayKeyFromDate, formatDayLabel, mealsForDay } from "./dates";
+export { EMPTY_MACROS, addDays, dailyTotals, dayKeyFromDate, formatDayLabel, mealsForDay } from "./dates.js";
 
 export {
   FRIES_MEAL,
@@ -79,5 +79,5 @@ export {
   mockSampleForSeed,
   sampleBlurb,
   sampleTitle,
-} from "./mocks";
-export type { SampleId } from "./mocks";
+} from "./mocks.js";
+export type { SampleId } from "./mocks.js";

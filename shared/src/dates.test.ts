@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { itemsFromAnalysis } from "./nutrition";
-import { mealTypeForTime } from "./meal-type";
-import { SAUSAGE_MEAL } from "./mocks";
-import type { LoggedMeal } from "./schema";
-import { addDays, dailyTotals, dayKeyFromDate, formatDayLabel, mealsForDay } from "./dates";
+import { itemsFromAnalysis } from "./nutrition.js";
+import { mealTypeForTime } from "./meal-type.js";
+import { SAUSAGE_MEAL } from "./mocks.js";
+import type { LoggedMeal } from "./schema.js";
+import { addDays, dailyTotals, dayKeyFromDate, formatDayLabel, mealsForDay } from "./dates.js";
 
 function mealAt(date: Date, id: string): LoggedMeal {
   return {

@@ -1,4 +1,4 @@
-import type { MealAnalysis } from "./schema";
+import type { MealAnalysis } from "./schema.js";
 
 export type SampleId = "sausage-green-beans" | "fries-ketchup";
 

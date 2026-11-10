@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { Server } from "node:http";
-import { createMemoryQuota, type QuotaStore } from "./accounts";
-import { ProviderError } from "./errors";
-import { createRateLimiter } from "./rate-limit";
-import { createServer } from "./server";
-import type { VisionProvider } from "./providers/types";
+import { createMemoryQuota, type QuotaStore } from "./accounts.js";
+import { ProviderError } from "./errors.js";
+import { createRateLimiter } from "./rate-limit.js";
+import { createServer } from "./server.js";
+import type { VisionProvider } from "./providers/types.js";
 
 const SECRET = "test-secret";
 

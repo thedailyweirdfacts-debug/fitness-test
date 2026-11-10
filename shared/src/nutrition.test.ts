@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { AnalysisError } from "./schema";
-import { SAUSAGE_MEAL } from "./mocks";
+import { AnalysisError } from "./schema.js";
+import { SAUSAGE_MEAL } from "./mocks.js";
 import {
   createManualItem,
   finalizeAnalysis,
@@ -10,7 +10,7 @@ import {
   presentMeal,
   withGrams,
   withScale,
-} from "./nutrition";
+} from "./nutrition.js";
 
 describe("finalizeAnalysis", () => {
   it("recomputes totals and drops a sub-gram scrap", () => {

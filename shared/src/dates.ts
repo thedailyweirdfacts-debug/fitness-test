@@ -1,5 +1,5 @@
-import { presentMeal } from "./nutrition";
-import type { LoggedMeal, Macros } from "./schema";
+import { presentMeal } from "./nutrition.js";
+import type { LoggedMeal, Macros } from "./schema.js";
 
 export function dayKeyFromDate(date: Date): string {
   const year = date.getFullYear();

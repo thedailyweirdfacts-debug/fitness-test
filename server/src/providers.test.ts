@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createProvider, resolveVisionConfig } from "./config";
-import { SYSTEM_PROMPT } from "./prompt";
-import { extractJson } from "./json";
+import { createProvider, resolveVisionConfig } from "./config.js";
+import { SYSTEM_PROMPT } from "./prompt.js";
+import { extractJson } from "./json.js";
 
 const apple = {
   items: [

@@ -1,9 +1,9 @@
-import { MEAL_JSON_SCHEMA } from "../json-schema";
-import { extractJson } from "../json";
-import { ProviderError } from "../errors";
-import { SYSTEM_PROMPT, USER_PROMPT } from "../prompt";
-import { providerMessage } from "./openai";
-import type { FetchLike, VisionProvider } from "./types";
+import { MEAL_JSON_SCHEMA } from "../json-schema.js";
+import { extractJson } from "../json.js";
+import { ProviderError } from "../errors.js";
+import { SYSTEM_PROMPT, USER_PROMPT } from "../prompt.js";
+import { providerMessage } from "./openai.js";
+import type { FetchLike, VisionProvider } from "./types.js";
 
 export function createAnthropicProvider(options: {
   apiKey: string;

@@ -1,7 +1,7 @@
-import { HttpError } from "../server/src/errors";
-import { createRateLimiter } from "../server/src/rate-limit";
-import { runtimeOptions } from "../server/src/runtime";
-import { DEFAULT_BODY_LIMIT, handleRequest } from "../server/src/server";
+import { HttpError } from "../server/src/errors.js";
+import { createRateLimiter } from "../server/src/rate-limit.js";
+import { runtimeOptions } from "../server/src/runtime.js";
+import { DEFAULT_BODY_LIMIT, handleRequest, type RequestOutcome } from "../server/src/server.js";
 
 export const maxDuration = 60;
 
@@ -13,37 +13,102 @@ const CORS_HEADERS: Record<string, string> = {
   "Cache-Control": "no-store",
 };
 
-export default async function handler(request: Request): Promise<Response> {
-  const url = new URL(request.url);
+/** Node's IncomingMessage, plus the helpers Vercel adds. `url` is a path such as `/api/health`. */
+type NodeRequest = {
+  url?: string;
+  method?: string;
+  headers?: Record<string, string | string[] | undefined>;
+  body?: unknown;
+  [Symbol.asyncIterator]?: () => AsyncIterator<Uint8Array | string>;
+};
+
+type NodeResponse = {
+  statusCode?: number;
+  setHeader?: (name: string, value: string) => void;
+  writeHead?: (status: number, headers?: Record<string, string>) => void;
+  end: (body?: string) => void;
+};
+
+/**
+ * Vercel invokes a default-exported Node function as `(req, res)`.
+ * `req.url` is only the path. A Web `Request` (absolute URL, no `res`) still works for tests.
+ */
+export default async function handler(request: Request | NodeRequest, response?: NodeResponse): Promise<Response | void> {
+  const outcome = await dispatch(request);
+  if (response && typeof response.end === "function") {
+    sendNode(response, outcome);
+    return;
+  }
+  return toWeb(outcome);
+}
+
+async function dispatch(request: Request | NodeRequest): Promise<RequestOutcome> {
   const options = runtimeOptions();
   try {
-    const outcome = await handleRequest(options, options.rateLimiter ?? createRateLimiter(), {
-      method: request.method,
+    const url = requestUrl(request);
+    return await handleRequest(options, options.rateLimiter ?? createRateLimiter(), {
+      method: request.method ?? "GET",
       pathname: url.pathname,
-      header: (name) => request.headers.get(name) ?? undefined,
-      ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown",
-      readBody: () => readJson(request, DEFAULT_BODY_LIMIT),
-    });
-    if (outcome.status === 204) {
-      return new Response(null, { status: 204, headers: { ...CORS_HEADERS, ...outcome.headers } });
-    }
-    return Response.json(outcome.body, {
-      status: outcome.status,
-      headers: { ...CORS_HEADERS, ...outcome.headers },
+      header: (name) => headerValue(request, name),
+      ip: headerValue(request, "x-forwarded-for")?.split(",")[0]?.trim() || "unknown",
+      readBody: () => readBody(request, options.bodyLimit ?? DEFAULT_BODY_LIMIT),
     });
   } catch (error) {
     if (error instanceof HttpError) {
-      return Response.json({ error: error.code, message: error.message }, { status: error.status, headers: CORS_HEADERS });
+      return { status: error.status, body: { error: error.code, message: error.message } };
     }
     console.error("Unhandled server error");
-    return Response.json(
-      { error: "server_error", message: "Something went wrong while estimating the meal." },
-      { status: 500, headers: CORS_HEADERS },
-    );
+    return { status: 500, body: { error: "server_error", message: "Something went wrong while estimating the meal." } };
   }
 }
 
-async function readJson(request: Request, limit: number): Promise<unknown> {
+/** Absolute Web URLs ignore the base. Path-only Node URLs need it. */
+export function requestUrl(request: Request | NodeRequest): URL {
+  const raw = request.url || "/";
+  const host = headerValue(request, "x-forwarded-host") ?? headerValue(request, "host") ?? "localhost";
+  const proto = headerValue(request, "x-forwarded-proto") ?? "https";
+  return new URL(raw, `${proto}://${firstHeader(host)}`);
+}
+
+function isWebRequest(request: Request | NodeRequest): request is Request {
+  if (typeof Request !== "undefined" && request instanceof Request) return true;
+  const headers = (request as Request).headers;
+  return typeof headers?.get === "function" && typeof (request as Request).arrayBuffer === "function";
+}
+
+function headerValue(request: Request | NodeRequest, name: string): string | undefined {
+  if (isWebRequest(request)) return request.headers.get(name) ?? undefined;
+  const value = request.headers?.[name.toLowerCase()];
+  return firstHeader(value);
+}
+
+function firstHeader(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value || undefined;
+}
+
+async function readBody(request: Request | NodeRequest, limit: number): Promise<unknown> {
+  if (isWebRequest(request)) return readWebBody(request, limit);
+  if (request.body !== undefined && typeof request.body !== "string") return request.body;
+  if (typeof request.body === "string") return parseJson(request.body, limit);
+  if (typeof request[Symbol.asyncIterator] !== "function") {
+    throw new HttpError(400, "invalid_json", "Request body must be JSON.");
+  }
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request as AsyncIterable<Uint8Array | string>) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > limit) {
+      throw new HttpError(413, "payload_too_large", "That photo is too large. Try again after it has been resized.");
+    }
+    chunks.push(buffer);
+  }
+  if (chunks.length === 0) throw new HttpError(400, "invalid_json", "Request body must be JSON.");
+  return parseJson(Buffer.concat(chunks).toString("utf8"), limit);
+}
+
+async function readWebBody(request: Request, limit: number): Promise<unknown> {
   const declared = Number(request.headers.get("content-length") ?? "0");
   if (Number.isFinite(declared) && declared > limit) {
     throw new HttpError(413, "payload_too_large", "That photo is too large. Try again after it has been resized.");
@@ -52,12 +117,44 @@ async function readJson(request: Request, limit: number): Promise<unknown> {
   if (buffer.length > limit) {
     throw new HttpError(413, "payload_too_large", "That photo is too large. Try again after it has been resized.");
   }
-  if (buffer.length === 0) {
-    throw new HttpError(400, "invalid_json", "Request body must be JSON.");
+  if (buffer.length === 0) throw new HttpError(400, "invalid_json", "Request body must be JSON.");
+  return parseJson(buffer.toString("utf8"), limit);
+}
+
+function parseJson(text: string, limit: number): unknown {
+  if (Buffer.byteLength(text) > limit) {
+    throw new HttpError(413, "payload_too_large", "That photo is too large. Try again after it has been resized.");
   }
   try {
-    return JSON.parse(buffer.toString("utf8"));
+    return JSON.parse(text);
   } catch {
     throw new HttpError(400, "invalid_json", "Request body must be JSON.");
   }
+}
+
+function toWeb(outcome: RequestOutcome): Response {
+  if (outcome.status === 204) {
+    return new Response(null, { status: 204, headers: { ...CORS_HEADERS, ...outcome.headers } });
+  }
+  return Response.json(outcome.body, {
+    status: outcome.status,
+    headers: { ...CORS_HEADERS, ...outcome.headers },
+  });
+}
+
+function sendNode(response: NodeResponse, outcome: RequestOutcome): void {
+  const headers = { ...CORS_HEADERS, ...outcome.headers };
+  if (outcome.status === 204) {
+    response.writeHead?.(204, headers);
+    response.end();
+    return;
+  }
+  const payload = JSON.stringify(outcome.body);
+  response.writeHead?.(outcome.status, {
+    ...headers,
+    "Content-Type": "application/json; charset=utf-8",
+    "Content-Length": String(Buffer.byteLength(payload)),
+  });
+  response.statusCode = outcome.status;
+  response.end(payload);
 }

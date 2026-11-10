@@ -1,4 +1,4 @@
-import { mealTypeSchema, type LoggedMeal, type MealType } from "./schema";
+import { mealTypeSchema, type LoggedMeal, type MealType } from "./schema.js";
 
 export const MEAL_TYPES: readonly MealType[] = ["breakfast", "lunch", "dinner", "snack"];
 

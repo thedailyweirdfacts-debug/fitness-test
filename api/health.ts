@@ -1,1 +1,1 @@
-export { default, maxDuration } from "./analyze";
+export { default, maxDuration } from "./analyze.js";

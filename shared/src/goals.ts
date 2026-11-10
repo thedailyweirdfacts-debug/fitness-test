@@ -1,6 +1,6 @@
-import { dayKeyFromDate, addDays, dailyTotals } from "./dates";
-import { presentMeal } from "./nutrition";
-import type { LoggedMeal, MealType } from "./schema";
+import { dayKeyFromDate, addDays, dailyTotals } from "./dates.js";
+import { presentMeal } from "./nutrition.js";
+import type { LoggedMeal, MealType } from "./schema.js";
 
 export type GoalTargets = {
   calorieGoal: number | null;
