@@ -1,7 +1,7 @@
 import { MEAL_JSON_SCHEMA } from "../json-schema.js";
 import { extractJson } from "../json.js";
 import { ProviderError } from "../errors.js";
-import { SYSTEM_PROMPT, USER_PROMPT } from "../prompt.js";
+import { SYSTEM_PROMPT, TEXT_SYSTEM_PROMPT, textUserPrompt, USER_PROMPT } from "../prompt.js";
 import { providerMessage } from "./openai.js";
 import type { FetchLike, VisionImage, VisionProvider } from "./types.js";
 
@@ -73,42 +73,66 @@ export function createGeminiProvider(options: {
   return {
     id: "gemini",
     model: options.model,
-    async analyze(image) {
-      const started = now();
-      const chain = [options.model, ...fallbacks];
-      let sawBusy = false;
-
-      for (let index = 0; index < chain.length; index += 1) {
-        const model = chain[index] ?? options.model;
-        const attempts = index === 0 ? 2 : 1;
-        for (let attempt = 0; attempt < attempts; attempt += 1) {
-          if (now() - started > ESTIMATE_BUDGET_MS) {
-            sawBusy = true;
-            break;
-          }
-          if (index === 0 && attempt === 1) await sleep(GEMINI_RETRY_DELAY_MS);
-          try {
-            const meal = await requestModel(fetchImpl, options.apiKey, model, image);
-            console.log(`Plateful vision answer from ${model}`);
-            return meal;
-          } catch (error) {
-            if (!(error instanceof BusyModelError)) throw error;
-            sawBusy = true;
-            console.log(`Plateful vision model ${model} is busy: ${error.detail.slice(0, 180)}`);
-          }
-        }
-      }
-
-      if (sawBusy) {
-        console.log("Plateful vision: every Gemini model was busy");
-        throw new ProviderError(SCANNER_BUSY_MESSAGE, 503);
-      }
-      throw new ProviderError("The vision provider could not be reached.");
+    analyze(image) {
+      return runChain((model) => requestModel(fetchImpl, options.apiKey, model, image), "vision");
+    },
+    analyzeText(text) {
+      return runChain((model) => requestText(fetchImpl, options.apiKey, model, text), "text");
     },
   };
+
+  async function runChain(call: (model: string) => Promise<unknown>, kind: "vision" | "text"): Promise<unknown> {
+    const started = now();
+    const chain = [options.model, ...fallbacks];
+    let sawBusy = false;
+
+    for (let index = 0; index < chain.length; index += 1) {
+      const model = chain[index] ?? options.model;
+      const attempts = index === 0 ? 2 : 1;
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        if (now() - started > ESTIMATE_BUDGET_MS) {
+          sawBusy = true;
+          break;
+        }
+        if (index === 0 && attempt === 1) await sleep(GEMINI_RETRY_DELAY_MS);
+        try {
+          const meal = await call(model);
+          console.log(`Plateful ${kind} answer from ${model}`);
+          return meal;
+        } catch (error) {
+          if (!(error instanceof BusyModelError)) throw error;
+          sawBusy = true;
+          console.log(`Plateful ${kind} model ${model} is busy: ${error.detail.slice(0, 180)}`);
+        }
+      }
+    }
+
+    if (sawBusy) {
+      console.log(`Plateful ${kind}: every Gemini model was busy`);
+      throw new ProviderError(SCANNER_BUSY_MESSAGE, 503);
+    }
+    throw new ProviderError("The vision provider could not be reached.");
+  }
 }
 
 async function requestModel(fetchImpl: FetchLike, apiKey: string, model: string, image: VisionImage): Promise<unknown> {
+  return requestGemini(fetchImpl, apiKey, model, SYSTEM_PROMPT, [
+    { text: USER_PROMPT },
+    { inlineData: { mimeType: image.mimeType, data: image.imageBase64 } },
+  ]);
+}
+
+async function requestText(fetchImpl: FetchLike, apiKey: string, model: string, description: string): Promise<unknown> {
+  return requestGemini(fetchImpl, apiKey, model, TEXT_SYSTEM_PROMPT, [{ text: textUserPrompt(description) }]);
+}
+
+async function requestGemini(
+  fetchImpl: FetchLike,
+  apiKey: string,
+  model: string,
+  systemPrompt: string,
+  parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }>,
+): Promise<unknown> {
   let response: Response;
   try {
     response = await fetchImpl(`${GEMINI_URL}/${encodeURIComponent(model)}:generateContent`, {
@@ -118,16 +142,8 @@ async function requestModel(fetchImpl: FetchLike, apiKey: string, model: string,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { text: USER_PROMPT },
-              { inlineData: { mimeType: image.mimeType, data: image.imageBase64 } },
-            ],
-          },
-        ],
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: "user", parts }],
         generationConfig: {
           temperature: 0.2,
           responseMimeType: "application/json",

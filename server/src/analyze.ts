@@ -8,6 +8,13 @@ const requestSchema = z.object({
   mimeType: z.string().min(1).max(40),
 });
 
+const textSchema = z.object({
+  text: z.string().trim().min(1).max(500),
+});
+
+export const TEXT_NO_FOOD_MESSAGE = "That doesn't look like a meal. Name the foods you ate.";
+const TEXT_INVALID_MESSAGE = "Describe what you ate in 500 characters or less.";
+
 export const PHOTO_TOO_LARGE_MESSAGE =
   "That photo is too large to upload. Take it again so the app can shrink it, or choose a smaller picture.";
 
@@ -41,18 +48,41 @@ export async function analyzeRequest(body: unknown, provider: VisionProvider | n
     const raw = await provider.analyze({ imageBase64, mimeType });
     return finalizeAnalysis(raw);
   } catch (error) {
-    if (error instanceof AnalysisError) {
-      const status = error.code === "no_food" ? 422 : 502;
-      throw new HttpError(status, error.code, error.message);
-    }
-    if (error instanceof ProviderError) {
-      if (error.status === 503) {
-        throw new HttpError(503, "provider_busy", error.message);
-      }
-      throw new HttpError(502, "provider_error", error.message);
-    }
-    throw error;
+    rethrowEstimate(error);
   }
+}
+
+export async function analyzeTextRequest(body: unknown, provider: VisionProvider | null): Promise<MealAnalysis> {
+  if (!provider?.analyzeText) {
+    throw new HttpError(503, "not_configured", "No vision API key is configured on the server.");
+  }
+
+  const parsed = textSchema.safeParse(body);
+  if (!parsed.success) {
+    throw new HttpError(400, "invalid_request", TEXT_INVALID_MESSAGE);
+  }
+
+  try {
+    const raw = await provider.analyzeText(parsed.data.text);
+    return finalizeAnalysis(raw);
+  } catch (error) {
+    rethrowEstimate(error, TEXT_NO_FOOD_MESSAGE);
+  }
+}
+
+function rethrowEstimate(error: unknown, noFoodMessage?: string): never {
+  if (error instanceof AnalysisError) {
+    const status = error.code === "no_food" ? 422 : 502;
+    const message = error.code === "no_food" && noFoodMessage ? noFoodMessage : error.message;
+    throw new HttpError(status, error.code, message);
+  }
+  if (error instanceof ProviderError) {
+    if (error.status === 503) {
+      throw new HttpError(503, "provider_busy", error.message);
+    }
+    throw new HttpError(502, "provider_error", error.message);
+  }
+  throw error;
 }
 
 function normalizeBase64(value: string): string {

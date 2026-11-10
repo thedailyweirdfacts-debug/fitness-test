@@ -4,6 +4,9 @@
     "api/analyze.ts": {
       "maxDuration": 60
     },
+    "api/analyze-text.ts": {
+      "maxDuration": 60
+    },
     "api/health.ts": {
       "maxDuration": 10
     },

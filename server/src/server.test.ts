@@ -3,6 +3,7 @@ import type { Server } from "node:http";
 import { createMemoryQuota, type QuotaStore } from "./accounts.js";
 import { ProviderError } from "./errors.js";
 import { createRateLimiter } from "./rate-limit.js";
+import { TEXT_NO_FOOD_MESSAGE } from "./analyze.js";
 import { createGeminiProvider, SCANNER_BUSY_MESSAGE } from "./providers/gemini.js";
 import { createServer } from "./server.js";
 import type { VisionProvider } from "./providers/types.js";
@@ -72,11 +73,17 @@ describe("POST /api/analyze", () => {
     return `http://127.0.0.1:${port}`;
   }
 
-  function post(base: string, body: string, secret: string | null = SECRET, token: string | null = "user-a") {
+  function post(
+    base: string,
+    body: string,
+    secret: string | null = SECRET,
+    token: string | null = "user-a",
+    path = "/api/analyze",
+  ) {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (secret) headers["x-plateful-secret"] = secret;
     if (token) headers.Authorization = `Bearer ${token}`;
-    return fetch(`${base}/api/analyze`, { method: "POST", headers, body });
+    return fetch(`${base}${path}`, { method: "POST", headers, body });
   }
 
   it("reports health without a key and refuses to estimate", async () => {
@@ -266,5 +273,152 @@ describe("POST /api/analyze", () => {
       headers: { Authorization: "Bearer user-a", "x-plateful-secret": SECRET },
     });
     expect(await refunded.json()).toEqual({ used: 0, remaining: 1, limit: 1 });
+  });
+
+  it("requires a signed-in person for a typed meal", async () => {
+    const provider: VisionProvider = {
+      id: "gemini",
+      model: "gemini-3.8-flash",
+      async analyze() {
+        return apple;
+      },
+      async analyzeText() {
+        return apple;
+      },
+    };
+    const body = JSON.stringify({ text: "Chick-fil-A grilled chicken sandwich with a medium fry" });
+    const locked = await start(provider);
+    expect((await post(locked, body, "nope", "user-a", "/api/analyze-text")).status).toBe(401);
+    expect((await post(locked, body, SECRET, null, "/api/analyze-text")).status).toBe(401);
+    const unsigned = await start(provider, { accounts: false });
+    const refused = await post(unsigned, body, SECRET, "user-a", "/api/analyze-text");
+    expect(refused.status).toBe(503);
+    expect(await refused.json()).toMatchObject({ error: "accounts_not_configured" });
+    expect((await fetch(`${locked}/api/analyze-text`)).status).toBe(405);
+  });
+
+  it("validates a typed meal, strips unknown keys, and refunds a rejected description", async () => {
+    let seen = "";
+    const provider: VisionProvider = {
+      id: "gemini",
+      model: "gemini-3.8-flash",
+      async analyze() {
+        return apple;
+      },
+      async analyzeText(text) {
+        seen = text;
+        return apple;
+      },
+    };
+    const base = await start(provider, { dailyCap: 1 });
+    const path = "/api/analyze-text";
+
+    const missing = await post(base, JSON.stringify({ note: "no text" }), SECRET, "user-a", path);
+    expect(missing.status).toBe(400);
+    const blank = await post(base, JSON.stringify({ text: "   " }), SECRET, "user-a", path);
+    expect(blank.status).toBe(400);
+    const huge = await post(base, JSON.stringify({ text: "a".repeat(501) }), SECRET, "user-a", path);
+    expect(huge.status).toBe(400);
+
+    const accepted = await post(
+      base,
+      JSON.stringify({
+        text: "  Chick-fil-A grilled chicken sandwich with a medium fry  ",
+        uri: "file:///should-be-ignored",
+      }),
+      SECRET,
+      "user-a",
+      path,
+    );
+    expect(accepted.status).toBe(200);
+    expect(seen).toBe("Chick-fil-A grilled chicken sandwich with a medium fry");
+    const body = (await accepted.json()) as { totals: { calories: number }; items: unknown[] };
+    expect(body.items).toHaveLength(1);
+    expect(body.totals.calories).toBe(95);
+    const kept = await fetch(`${base}/api/quota`, {
+      headers: { Authorization: "Bearer user-a", "x-plateful-secret": SECRET },
+    });
+    expect(await kept.json()).toEqual({ used: 1, remaining: 0, limit: 1 });
+  });
+
+  it("refunds the scan when a typed meal is not food or the model fails", async () => {
+    let calls = 0;
+    const provider: VisionProvider = {
+      id: "gemini",
+      model: "gemini-3.8-flash",
+      async analyze() {
+        return apple;
+      },
+      async analyzeText() {
+        calls += 1;
+        if (calls === 1) return { items: [], confidence: "low", notes: "", excluded: [] };
+        throw new ProviderError("model down");
+      },
+    };
+    const base = await start(provider, { dailyCap: 1 });
+    const path = "/api/analyze-text";
+    const body = JSON.stringify({ text: "my car keys" });
+    const empty = await post(base, body, SECRET, "user-a", path);
+    expect(empty.status).toBe(422);
+    expect(await empty.json()).toMatchObject({ error: "no_food", message: TEXT_NO_FOOD_MESSAGE });
+    const failed = await post(base, body, SECRET, "user-a", path);
+    expect(failed.status).toBe(502);
+    const quota = await fetch(`${base}/api/quota`, {
+      headers: { Authorization: "Bearer user-a", "x-plateful-secret": SECRET },
+    });
+    expect(await quota.json()).toEqual({ used: 0, remaining: 1, limit: 1 });
+  });
+
+  it("retries a busy Gemini model and then estimates the typed meal with a backup", async () => {
+    const urls: string[] = [];
+    const prompts: string[] = [];
+    const provider = createGeminiProvider({
+      apiKey: "test-key",
+      model: "gemini-3.8-flash",
+      fallbackModels: ["gemini-3.6-flash", "gemini-3.5-flash-lite"],
+      sleep: async () => undefined,
+      fetchImpl: async (url, init) => {
+        urls.push(url);
+        const sent = JSON.parse(String(init?.body)) as {
+          systemInstruction?: { parts?: Array<{ text?: string }> };
+          contents?: Array<{ parts?: Array<{ text?: string; inlineData?: unknown }> }>;
+        };
+        prompts.push(
+          `${sent.systemInstruction?.parts?.[0]?.text ?? ""}\n${sent.contents?.[0]?.parts?.[0]?.text ?? ""}`,
+        );
+        expect(sent.contents?.[0]?.parts?.some((part) => part.inlineData)).toBeFalsy();
+        if (urls.length < 3) {
+          return new Response(
+            JSON.stringify({ error: { message: "This model is currently experiencing high demand.", status: "UNAVAILABLE" } }),
+            { status: 503 },
+          );
+        }
+        return new Response(
+          JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(apple) }] } }] }),
+          { status: 200 },
+        );
+      },
+    });
+    const base = await start(provider, { dailyCap: 2 });
+    const response = await post(
+      base,
+      JSON.stringify({ text: "Chick-fil-A grilled chicken sandwich with a medium fry" }),
+      SECRET,
+      "user-a",
+      "/api/analyze-text",
+    );
+    expect(response.status).toBe(200);
+    expect(urls.map((url) => url.split("/models/")[1]?.split(":")[0])).toEqual([
+      "gemini-3.8-flash",
+      "gemini-3.8-flash",
+      "gemini-3.6-flash",
+    ]);
+    expect(prompts[2]).toContain("published");
+    expect(prompts[2]).toContain("Chick-fil-A");
+    expect(prompts[2]).toContain("medium fry");
+    const quota = await fetch(`${base}/api/quota`, {
+      headers: { Authorization: "Bearer user-a", "x-plateful-secret": SECRET },
+    });
+    expect(await quota.json()).toEqual({ used: 1, remaining: 1, limit: 2 });
   });
 });

@@ -88,7 +88,7 @@ export default function ResultsScreen() {
           {current.photoUri && !photoFailed ? (
             <Image source={{ uri: current.photoUri }} style={styles.photo} onError={() => setPhotoFailed(true)} />
           ) : (
-            <PlateArt kind={current.sampleId ?? "sausage-green-beans"} />
+            <PlateArt kind={current.sampleId ?? "empty"} />
           )}
         </View>
 

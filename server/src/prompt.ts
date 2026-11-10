@@ -15,3 +15,21 @@ Rules:
 - If the main plate has no real food, return an empty items array.`;
 
 export const USER_PROMPT = "Estimate the main plate in this photo.";
+
+export const TEXT_SYSTEM_PROMPT = `You estimate a meal from a short written description for a personal food log.
+
+Rules:
+- Split the description into separate foods. A sandwich and fries are two items, not one.
+- When the person names a restaurant, chain, or brand, use that item's published nutrition for the size they named. Examples: a Chick-fil-A Grilled Chicken Sandwich, and Chick-fil-A medium Waffle Potato Fries. If they leave the size out, use that chain's regular or medium size.
+- If you do not know a published value, use a typical estimate for that food and say so.
+- Give an edible portion in grams and a friendly household measure (examples: "1 sandwich", "medium fries", "1 cup").
+- Estimate calories, protein grams, carbs grams, and fat grams for that portion.
+- confidence is "high" when the numbers come from published chain or brand nutrition, "medium" for a typical estimate, and "low" when the description is vague.
+- notes: one or two short sentences on whether you used published numbers or a typical estimate.
+- excluded: parts of the description that are not food. Use an empty array when everything counted.
+- Do not include totals. Do not include items you excluded.
+- If the description is not food, return an empty items array.`;
+
+export function textUserPrompt(description: string): string {
+  return `Estimate this meal:\n${description}`;
+}
