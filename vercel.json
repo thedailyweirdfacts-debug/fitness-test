@@ -18,6 +18,9 @@
     },
     "api/product.ts": {
       "maxDuration": 10
+    },
+    "api/rewards.ts": {
+      "maxDuration": 10
     }
   }
 }

@@ -10,12 +10,14 @@ import { MacroLine, PlateArt } from "../../src/components/ui";
 import { confirm } from "../../src/lib/confirm";
 import { draftFromMeal } from "../../src/lib/draft";
 import { useApp } from "../../src/state/AppContext";
+import { useRewardsModel } from "../../src/state/useRewards";
 import { colors, displayFont } from "../../src/theme";
 
 export default function LogScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { meals, settings, openDraft, deleteMeal, updateMealType } = useApp();
+  const { rewards } = useRewardsModel();
   const today = dayKeyFromDate(new Date());
   const [day, setDay] = useState(today);
   const totals = dailyTotals(meals, day);
@@ -65,7 +67,7 @@ export default function LogScreen() {
         </View>
         <MacroLine totals={totals} />
         {day === today && settings.calorieGoal != null ? (
-          <GoalProgress status={report.today} currentStreak={report.currentStreak} bestStreak={report.bestStreak} />
+          <GoalProgress status={report.today} currentStreak={rewards.currentStreak} bestStreak={rewards.bestStreak} freezes={rewards.freezes} />
         ) : null}
       </View>
 

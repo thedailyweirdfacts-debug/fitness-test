@@ -29,6 +29,7 @@ type MealRow = {
   notes: string | null;
   excluded: unknown;
   source: string;
+  log_kind?: string | null;
 };
 
 export async function readPhotoBytes(uri: string | null): Promise<Uint8Array | null> {
@@ -74,7 +75,7 @@ export async function upsertCloudMeal(
     });
     if (uploaded.error) throw new Error(uploaded.error.message);
   }
-  const saved = await supabase.from("meals").upsert({
+  const row = {
     id: meal.id,
     user_id: userId,
     logged_at: meal.loggedAt,
@@ -86,7 +87,11 @@ export async function upsertCloudMeal(
     excluded: meal.excluded,
     source: meal.source,
     updated_at: new Date().toISOString(),
-  });
+  };
+  let saved = await supabase.from("meals").upsert({ ...row, log_kind: meal.logKind ?? null });
+  if (saved.error && /log_kind/i.test(saved.error.message)) {
+    saved = await supabase.from("meals").upsert(row);
+  }
   if (saved.error) throw new Error(saved.error.message);
   const photoUri = path ? (await signedPhotoUrl(supabase, path)) ?? meal.photoUri : meal.photoUri;
   return { meal: { ...meal, photoUri }, path };
@@ -241,6 +246,9 @@ function mealFromRow(row: MealRow, photoUri: string | null): LoggedMeal | null {
     notes: row.notes ?? "",
     excluded: row.excluded ?? [],
     source: row.source,
+    ...(row.log_kind === "photo" || row.log_kind === "typed" || row.log_kind === "barcode" || row.log_kind === "recipe" || row.log_kind === "sample"
+      ? { logKind: row.log_kind }
+      : {}),
   });
   return parsed.success ? parsed.data : null;
 }

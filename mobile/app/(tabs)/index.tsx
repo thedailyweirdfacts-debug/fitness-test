@@ -16,6 +16,7 @@ import {
   sampleTitle,
 } from "../../../shared/src";
 import { GoalProgress } from "../../src/components/GoalProgress";
+import { ChallengeCard, LevelCard } from "../../src/components/RewardsCard";
 import { MacroLine, PlateArt } from "../../src/components/ui";
 import { BarcodeLookup } from "../../src/components/BarcodeLookup";
 import { AnalyzeError, analyzeImage, analyzeMealText, lookupBarcode } from "../../src/lib/api";
@@ -23,13 +24,15 @@ import { draftFromAnalysis } from "../../src/lib/draft";
 import { preparePlatePhoto } from "../../src/lib/photos";
 import { resolveAppSecret } from "../../src/lib/settings";
 import { useApp } from "../../src/state/AppContext";
+import { useRewardsModel } from "../../src/state/useRewards";
 import { colors, displayFont, shadow } from "../../src/theme";
 import { formatAmount } from "../../src/components/ui";
 
 export default function ScanScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { settings, meals, openDraft, session, scansRemaining, refreshQuota, noteScansRemaining, syncError } = useApp();
+  const { settings, meals, openDraft, session, scansRemaining, refreshQuota, refreshRewards, noteScansRemaining, syncError } = useApp();
+  const { rewards } = useRewardsModel();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -51,8 +54,11 @@ export default function ScanScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      if (session && !settings.useDemoMode) void refreshQuota();
-    }, [session, settings.useDemoMode, refreshQuota]),
+      if (session && !settings.useDemoMode) {
+        void refreshQuota();
+        void refreshRewards();
+      }
+    }, [session, settings.useDemoMode, refreshQuota, refreshRewards]),
   );
 
   async function choose(source: "camera" | "library") {
@@ -103,7 +109,7 @@ export default function ScanScreen() {
 
       if (settings.useDemoMode || !settings.apiBaseUrl) {
         const sample = mockSampleForSeed(`${asset.uri}:${asset.fileSize ?? 0}`);
-        openDraft(draftFromAnalysis(sample.analysis, { photoUri, source: "demo", sampleId: sample.id }));
+        openDraft(draftFromAnalysis(sample.analysis, { photoUri, source: "demo", sampleId: sample.id, logKind: "sample" }));
       } else {
         if (!prepared) throw new AnalyzeError("That photo couldn't be prepared. Try another one.", "bad_response");
         const result = await analyzeImage(
@@ -113,7 +119,7 @@ export default function ScanScreen() {
           session?.accessToken ?? "",
         );
         noteScansRemaining(result.scansRemaining);
-        openDraft(draftFromAnalysis(result.analysis, { photoUri, source: "vision", sampleId: null }));
+        openDraft(draftFromAnalysis(result.analysis, { photoUri, source: "vision", sampleId: null, logKind: "photo" }));
       }
       router.push("/results");
     } catch (caught) {
@@ -147,7 +153,7 @@ export default function ScanScreen() {
     try {
       if (settings.useDemoMode || !settings.apiBaseUrl) {
         const sample = mockSampleForSeed(text);
-        openDraft(draftFromAnalysis(sample.analysis, { photoUri: null, source: "demo", sampleId: sample.id }));
+        openDraft(draftFromAnalysis(sample.analysis, { photoUri: null, source: "demo", sampleId: sample.id, logKind: "sample" }));
       } else {
         const result = await analyzeMealText(
           settings.apiBaseUrl,
@@ -156,7 +162,7 @@ export default function ScanScreen() {
           session?.accessToken ?? "",
         );
         noteScansRemaining(result.scansRemaining);
-        openDraft(draftFromAnalysis(result.analysis, { photoUri: null, source: "vision", sampleId: null }));
+        openDraft(draftFromAnalysis(result.analysis, { photoUri: null, source: "vision", sampleId: null, logKind: "typed" }));
       }
       setMealText("");
       setWriting(false);
@@ -198,7 +204,7 @@ export default function ScanScreen() {
         session.accessToken,
       );
       if (result.scansRemaining != null) noteScansRemaining(result.scansRemaining);
-      openDraft(draftFromAnalysis(result.analysis, { photoUri: null, source: "vision", sampleId: null }));
+      openDraft(draftFromAnalysis(result.analysis, { photoUri: null, source: "vision", sampleId: null, logKind: "barcode" }));
       setBarcodeOpen(false);
       router.push("/results");
     } catch (caught) {
@@ -217,6 +223,7 @@ export default function ScanScreen() {
         photoUri: null,
         source: "sample",
         sampleId: id,
+        logKind: "sample",
       }),
     );
     router.push("/results");
@@ -245,6 +252,7 @@ export default function ScanScreen() {
           </Pressable>
         </View>
 
+        <LevelCard rewards={rewards} onBadges={() => router.push("/badges")} onFriends={() => router.push("/friends")} />
         {syncError ? <Text style={styles.error}>{syncError}</Text> : null}
         {!session && !settings.useDemoMode && settings.apiBaseUrl ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Sign in" onPress={() => router.push("/auth")} style={styles.signIn}>
@@ -266,9 +274,16 @@ export default function ScanScreen() {
             <Text style={styles.todayEmpty}>Nothing logged yet. Your running total will show up here.</Text>
           )}
           {settings.calorieGoal != null ? (
-            <GoalProgress status={report.today} currentStreak={report.currentStreak} bestStreak={report.bestStreak} />
+            <GoalProgress
+              status={report.today}
+              currentStreak={rewards.currentStreak}
+              bestStreak={rewards.bestStreak}
+              freezes={rewards.freezes}
+            />
           ) : null}
         </Pressable>
+
+        <ChallengeCard challenges={rewards.challenges} />
 
         <Pressable
           accessibilityRole="button"

@@ -11,12 +11,13 @@ import {
   parseMealLog,
   parseRecipeList,
   recipeSchema,
+  inferLogKind,
   type LoggedMeal,
   type MealType,
   type Recipe,
   type SeenRewards,
 } from "../../../shared/src";
-import { fetchQuota } from "../lib/api";
+import { fetchQuota, postRewards, type RewardPayload } from "../lib/api";
 import {
   deleteCloudMeal,
   deleteCloudRecipe,
@@ -55,6 +56,10 @@ type AppContextValue = {
   noteScansRemaining: (value: number | null) => void;
   refreshQuota: () => Promise<void>;
   syncError: string | null;
+  remoteRewards: (RewardPayload & { stamp: string }) | null;
+  rewardsNote: string | null;
+  refreshRewards: () => Promise<void>;
+  sendRewards: (body: Record<string, unknown>) => Promise<string | null>;
   signOut: () => Promise<void>;
   settings: AppSettings;
   meals: LoggedMeal[];
@@ -114,6 +119,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [passwordReset, setPasswordReset] = useState(false);
   const [scansRemaining, setScansRemaining] = useState<number | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [remoteRewards, setRemoteRewards] = useState<(RewardPayload & { stamp: string }) | null>(null);
+  const [rewardsNote, setRewardsNote] = useState<string | null>(null);
   const [seenRewards, setSeenRewards] = useState<SeenRewards>(EMPTY_SEEN);
   const mealsRef = useRef<LoggedMeal[]>([]);
   const localMealsRef = useRef<LoggedMeal[]>([]);
@@ -126,6 +133,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const sessionRef = useRef<AccountSession | null>(null);
   const photoPathsRef = useRef<Map<string, string>>(new Map());
   const bootedRef = useRef(false);
+  const refreshRewardsRef = useRef<() => Promise<void>>(async () => undefined);
 
   const replaceMeals = useCallback((next: LoggedMeal[], local: boolean) => {
     mealsRef.current = next;
@@ -153,6 +161,55 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setScansRemaining(null);
     }
   }, []);
+
+  const rewardStamp = useCallback(() => {
+    const stored = settingsRef.current;
+    return [
+      mealsRef.current
+        .map((meal) => `${meal.id}:${meal.loggedAt}:${meal.mealType}:${meal.logKind ?? ""}:${meal.items.map((item) => item.baseCalories).join(",")}`)
+        .join("|"),
+      recipesRef.current.map((recipe) => recipe.id).join("|"),
+      stored.calorieGoal ?? "",
+      stored.proteinGoal ?? "",
+      stored.goalWindowPercent,
+    ].join("~");
+  }, []);
+
+  const refreshRewards = useCallback(async () => {
+    const current = sessionRef.current;
+    const stored = settingsRef.current;
+    if (!current || !stored.apiBaseUrl || stored.useDemoMode) {
+      setRemoteRewards(null);
+      return;
+    }
+    const stamp = rewardStamp();
+    try {
+      const result = await postRewards(stored.apiBaseUrl, current.accessToken, resolveAppSecret(stored.appSecret), { action: "sync" });
+      if (rewardStamp() !== stamp) return;
+      setRemoteRewards({ ...result, stamp });
+      setRewardsNote(null);
+    } catch (error) {
+      if (error instanceof Error && /003_rewards/.test(error.message)) setRewardsNote(error.message);
+    }
+  }, [rewardStamp]);
+  refreshRewardsRef.current = refreshRewards;
+
+  const sendRewards = useCallback(
+    async (body: Record<string, unknown>) => {
+      const current = sessionRef.current;
+      const stored = settingsRef.current;
+      if (!current || !stored.apiBaseUrl || stored.useDemoMode) return "Sign in to use friend codes.";
+      try {
+        const result = await postRewards(stored.apiBaseUrl, current.accessToken, resolveAppSecret(stored.appSecret), body);
+        setRemoteRewards({ ...result, stamp: rewardStamp() });
+        setRewardsNote(null);
+        return null;
+      } catch (error) {
+        return error instanceof Error ? error.message : "That didn't work.";
+      }
+    },
+    [rewardStamp],
+  );
 
   const adoptSession = useCallback(
     async (nextSession: Session) => {
@@ -229,6 +286,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setSyncError("Couldn't open your saved recipes. In Supabase, run the recipes SQL, then sign in again.");
         }
         await refreshQuota();
+        await refreshRewardsRef.current();
       } catch {
         setSyncError("Couldn't open your account log. Check the connection and try again.");
       }
@@ -245,6 +303,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         sessionRef.current = null;
         setSession(null);
         setScansRemaining(null);
+        setRemoteRewards(null);
         seenRef.current = localSeenRef.current;
         setSeenRewards(localSeenRef.current);
         replaceMeals(localMealsRef.current, false);
@@ -349,11 +408,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       refreshQuota,
       syncError,
+      remoteRewards,
+      rewardsNote,
+      refreshRewards,
+      sendRewards,
       async signOut() {
         await getSupabase()?.auth.signOut();
         sessionRef.current = null;
         setSession(null);
         setScansRemaining(null);
+        setRemoteRewards(null);
         setPasswordReset(false);
         seenRef.current = localSeenRef.current;
         setSeenRewards(localSeenRef.current);
@@ -383,6 +447,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           : [...recipesRef.current, stored];
         if (!current) await AsyncStorage.setItem(RECIPES_KEY, JSON.stringify(next));
         replaceRecipes(next, !current);
+        void refreshRewardsRef.current();
       },
       async deleteRecipe(id) {
         const current = sessionRef.current;
@@ -396,6 +461,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!current) await AsyncStorage.setItem(RECIPES_KEY, JSON.stringify(next));
         replaceRecipes(next, !current);
         if (target && !current) deleteStoredPhoto(target.photoUri);
+        void refreshRewardsRef.current();
       },
       seenRewards,
       async saveSeenRewards(next) {
@@ -448,6 +514,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           notes: next.notes,
           excluded: next.excluded,
           source: next.source,
+          logKind: next.logKind ?? inferLogKind({ source: next.source, photoUri, logKind: next.logKind }),
         };
         const current = sessionRef.current;
         const supabase = getSupabase();
@@ -471,6 +538,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (previous?.photoUri && previous.photoUri !== photoUri) deleteStoredPhoto(previous.photoUri);
         replaceMeals(nextMeals, !current);
         setDraft(next);
+        void refreshRewardsRef.current();
       },
       async updateMealType(id, mealType) {
         const currentMeal = mealsRef.current.find((meal) => meal.id === id);
@@ -485,6 +553,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!current) await AsyncStorage.setItem(MEALS_KEY, JSON.stringify(nextMeals));
         replaceMeals(nextMeals, !current);
         setDraft((item) => (item?.editingId === id ? { ...item, mealType } : item));
+        void refreshRewardsRef.current();
       },
       async deleteMeal(id) {
         const current = sessionRef.current;
@@ -498,9 +567,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (!current) await AsyncStorage.setItem(MEALS_KEY, JSON.stringify(nextMeals));
         replaceMeals(nextMeals, !current);
         if (target && !current) deleteStoredPhoto(target.photoUri);
+        void refreshRewardsRef.current();
       },
     }),
-    [ready, session, passwordReset, scansRemaining, refreshQuota, syncError, settings, meals, recipes, seenRewards, draft, replaceMeals, replaceRecipes],
+    [ready, session, passwordReset, scansRemaining, refreshQuota, refreshRewards, sendRewards, syncError, remoteRewards, rewardsNote, settings, meals, recipes, seenRewards, draft, replaceMeals, replaceRecipes],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

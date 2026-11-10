@@ -7,21 +7,24 @@ export function GoalProgress({
   status,
   currentStreak,
   bestStreak,
+  freezes = 0,
 }: {
   status: DayGoalStatus;
   currentStreak: number;
   bestStreak: number;
+  freezes?: number;
 }) {
   if (status.calorieGoal == null || status.low == null || status.high == null) return null;
   const scale = Math.max(status.high, status.calories, 1);
   const fill = Math.min(1, status.calories / scale);
   const bandLeft = status.low / scale;
   const bandWidth = Math.max(0, (status.high - status.low) / scale);
+  const freezeCopy = freezes > 0 ? ` · ${freezes} freeze${freezes === 1 ? "" : "s"}` : "";
   const streak =
     currentStreak > 0
-      ? `${currentStreak} day streak · best ${bestStreak}`
+      ? `${currentStreak} day streak · best ${bestStreak}${freezeCopy}`
       : bestStreak > 0
-        ? `Best streak is ${bestStreak} days`
+        ? `Best streak is ${bestStreak} days${freezeCopy}`
         : "A streak starts when a day lands in the window";
 
   return (

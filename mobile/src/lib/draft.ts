@@ -5,6 +5,7 @@ import {
   type LoggedMeal,
   mealTypeForTime,
   type MealAnalysis,
+  type LogKind,
   type MealSource,
   type MealType,
   type SampleId,
@@ -23,6 +24,7 @@ export type Draft = {
   editingId: string | null;
   loggedAt: string | null;
   mealType: MealType;
+  logKind?: LogKind;
 };
 
 export function draftFromAnalysis(
@@ -31,6 +33,7 @@ export function draftFromAnalysis(
     photoUri: string | null;
     source: MealSource;
     sampleId: SampleId | null;
+    logKind?: LogKind;
   },
 ): Draft {
   return {
@@ -45,6 +48,7 @@ export function draftFromAnalysis(
     editingId: null,
     loggedAt: null,
     mealType: mealTypeForTime(new Date()),
+    logKind: extra.logKind,
   };
 }
 
@@ -61,5 +65,6 @@ export function draftFromMeal(meal: LoggedMeal): Draft {
     editingId: meal.id,
     loggedAt: meal.loggedAt,
     mealType: meal.mealType,
+    logKind: meal.logKind,
   };
 }

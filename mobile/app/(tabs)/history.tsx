@@ -9,6 +9,7 @@ import { MacroLine, PlateArt } from "../../src/components/ui";
 import { confirm } from "../../src/lib/confirm";
 import { draftFromMeal } from "../../src/lib/draft";
 import { useApp } from "../../src/state/AppContext";
+import { useRewardsModel } from "../../src/state/useRewards";
 import { colors, displayFont } from "../../src/theme";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -17,6 +18,7 @@ export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { meals, settings, openDraft, deleteMeal, updateMealType } = useApp();
+  const { rewards } = useRewardsModel();
   const today = dayKeyFromDate(new Date());
   const [cursor, setCursor] = useState(() => new Date());
   const [selected, setSelected] = useState(today);
@@ -42,7 +44,7 @@ export default function HistoryScreen() {
   const totals = dailyTotals(meals, selected);
   const monthLabel = new Date(year, month, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
   const viewingCurrentMonth = year === new Date().getFullYear() && month === new Date().getMonth();
-  const earned = report.badges.filter((badge) => badge.earned);
+  const earned = rewards.badges.filter((badge) => badge.earned);
 
   function openMonth(delta: number) {
     const next = new Date(year, month + delta, 1);
@@ -136,24 +138,16 @@ export default function HistoryScreen() {
       )}
 
       <View style={styles.badges}>
-        <Text style={styles.kicker}>Badges</Text>
-        {earned.length === 0 ? (
-          <Text style={styles.badgeEmpty}>Badges show up as you log meals and land near a goal. Nothing is lost if you skip a day.</Text>
-        ) : (
-          earned.map((badge) => (
-            <View key={badge.id} style={styles.badge}>
-              <Text style={styles.badgeTitle}>{badge.title}</Text>
-              <Text style={styles.badgeDetail}>{badge.detail}</Text>
-            </View>
-          ))
-        )}
-        {settings.calorieGoal != null ? (
-          <Text style={styles.streak}>
-            {report.currentStreak > 0 ? `${report.currentStreak} day streak` : "No streak yet"} · best {report.bestStreak}
-          </Text>
-        ) : (
-          <Text style={styles.badgeEmpty}>Set a calorie goal in Settings when you want streaks.</Text>
-        )}
+        <Text style={styles.kicker}>Streak</Text>
+        <Text style={styles.streak}>
+          {rewards.currentStreak > 0 ? `${rewards.currentStreak} day streak` : "No streak yet"} · best {rewards.bestStreak} ·{" "}
+          {rewards.freezes} freeze{rewards.freezes === 1 ? "" : "s"}
+        </Text>
+        <Text style={styles.badgeEmpty}>A freeze is earned every 7 goal days, you can hold 2, and one is used automatically if you miss a day. Days follow Pacific time.</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Open badges" onPress={() => router.push("/badges")} style={styles.badge}>
+          <Text style={styles.badgeTitle}>{earned.length} badges unlocked</Text>
+          <Text style={styles.badgeDetail}>See the locked and unlocked set.</Text>
+        </Pressable>
       </View>
     </ScrollView>
   );

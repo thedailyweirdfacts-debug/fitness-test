@@ -69,6 +69,8 @@ export const mealSourceSchema = z.enum(["demo", "vision", "sample", "recipe"]);
 
 export const mealTypeSchema = z.enum(["breakfast", "lunch", "dinner", "snack"]);
 
+export const logKindSchema = z.enum(["photo", "typed", "barcode", "recipe", "sample"]);
+
 export const loggedMealSchema = z
   .object({
     id: z.string().min(1),
@@ -80,6 +82,7 @@ export const loggedMealSchema = z
     notes: z.string().max(500),
     excluded: z.array(z.string().max(140)).max(8),
     source: mealSourceSchema,
+    logKind: logKindSchema.optional(),
   })
   .strict();
 
@@ -90,6 +93,7 @@ export type ModelOutput = z.infer<typeof modelOutputSchema>;
 export type MealAnalysis = z.infer<typeof mealAnalysisSchema>;
 export type FoodItem = z.infer<typeof foodItemSchema>;
 export type MealSource = z.infer<typeof mealSourceSchema>;
+export type LogKind = z.infer<typeof logKindSchema>;
 export type MealType = z.infer<typeof mealTypeSchema>;
 export type LoggedMeal = z.infer<typeof loggedMealSchema>;
 
