@@ -2,6 +2,7 @@ import { createServer as createHttpServer, type IncomingMessage, type Server, ty
 import { quotaDayKey } from "../../shared/src/account.js";
 import { bearerToken, type QuotaStore, type VerifiedUser } from "./accounts.js";
 import { analyzeRequest, analyzeTextRequest, PHOTO_TOO_LARGE_MESSAGE } from "./analyze.js";
+import { estimatePreparedRecipe, prepareRecipe } from "./recipe.js";
 import { HttpError } from "./errors.js";
 import {
   lookupOpenFoodFacts,
@@ -107,6 +108,10 @@ export async function handleRequest(
     return lookupProduct(options, input);
   }
 
+  if (input.pathname === "/api/analyze-recipe") {
+    return estimateRecipe(options, rateLimiter, input);
+  }
+
   const isPhoto = input.pathname === "/api/analyze";
   const isText = input.pathname === "/api/analyze-text";
   if (!isPhoto && !isText && input.pathname !== "/api/quota") {
@@ -170,6 +175,66 @@ export async function handleRequest(
       body: analysis,
       headers: { "x-scans-remaining": String(remaining) },
     };
+  } catch (error) {
+    await options.quota!.release(user.userId, day).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function estimateRecipe(
+  options: ServerOptions,
+  rateLimiter: RateLimiter,
+  input: {
+    method: string;
+    header: (name: string) => string | undefined;
+    ip: string;
+    readBody: () => Promise<unknown>;
+  },
+): Promise<RequestOutcome> {
+  if (input.method !== "POST") {
+    throw new HttpError(405, "method_not_allowed", "Use POST to estimate a recipe.");
+  }
+  const body = await input.readBody();
+  const user = await requireUser(options, input.header);
+  const prepared = await prepareRecipe(body, options.lookupProduct ?? lookupOpenFoodFacts);
+  if (!prepared.needsVision) {
+    return { status: 200, body: prepared.analysis };
+  }
+
+  const decision = rateLimiter(input.ip || "unknown");
+  if (!decision.ok) {
+    return {
+      status: 429,
+      headers: { "Retry-After": String(decision.retryAfterSeconds) },
+      body: {
+        error: "rate_limited",
+        message: "Too many scans. Wait a bit and try again. The free Gemini plan only allows a handful of photos a day.",
+      },
+    };
+  }
+
+  const day = quotaDayKey(new Date());
+  const cap = options.dailyCap ?? 10;
+  let remaining: number;
+  try {
+    remaining = await options.quota!.consume(user.userId, day, cap);
+  } catch {
+    throw new HttpError(503, "quota_unavailable", "The scan counter could not be reached. Try again in a moment.");
+  }
+  if (remaining < 0) {
+    return {
+      status: 429,
+      headers: { "x-scans-remaining": "0" },
+      body: {
+        error: "scan_cap",
+        message: "No free scans left today. They reset overnight, Pacific time. Demo mode still works.",
+      },
+    };
+  }
+
+  try {
+    const analysis = await estimatePreparedRecipe(prepared, options.provider);
+    return { status: 200, body: analysis, headers: { "x-scans-remaining": String(remaining) } };
   } catch (error) {
     await options.quota!.release(user.userId, day).catch(() => undefined);
     throw error;

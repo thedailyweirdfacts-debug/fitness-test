@@ -65,7 +65,7 @@ export const foodItemSchema = z
   })
   .strict();
 
-export const mealSourceSchema = z.enum(["demo", "vision", "sample"]);
+export const mealSourceSchema = z.enum(["demo", "vision", "sample", "recipe"]);
 
 export const mealTypeSchema = z.enum(["breakfast", "lunch", "dinner", "snack"]);
 
@@ -92,6 +92,24 @@ export type FoodItem = z.infer<typeof foodItemSchema>;
 export type MealSource = z.infer<typeof mealSourceSchema>;
 export type MealType = z.infer<typeof mealTypeSchema>;
 export type LoggedMeal = z.infer<typeof loggedMealSchema>;
+
+/** A homemade food. Ingredient items are the whole batch, before it is split into servings. */
+export const recipeSchema = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().trim().min(1).max(80),
+    servings: z.number().min(1).max(40),
+    cookedGrams: z.number().positive().max(20000).nullable(),
+    photoUri: z.string().nullable(),
+    items: z.array(foodItemSchema).min(1).max(12),
+    confidence: confidenceSchema,
+    notes: z.string().max(500),
+    createdAt: z.string().min(1),
+    updatedAt: z.string().min(1),
+  })
+  .strict();
+
+export type Recipe = z.infer<typeof recipeSchema>;
 
 export class AnalysisError extends Error {
   constructor(

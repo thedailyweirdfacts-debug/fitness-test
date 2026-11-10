@@ -87,7 +87,7 @@ export async function analyzeTextRequest(body: unknown, provider: VisionProvider
   }
 }
 
-function rethrowEstimate(error: unknown, noFoodMessage?: string): never {
+export function rethrowEstimate(error: unknown, noFoodMessage?: string): never {
   if (error instanceof AnalysisError) {
     const status = error.code === "no_food" ? 422 : 502;
     const message = error.code === "no_food" && noFoodMessage ? noFoodMessage : error.message;

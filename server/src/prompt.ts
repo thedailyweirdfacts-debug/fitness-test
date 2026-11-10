@@ -41,3 +41,30 @@ Rules:
 export function textUserPrompt(description: string): string {
   return `Estimate this meal:\n${description}`;
 }
+
+export const RECIPE_SYSTEM_PROMPT = `You total the ingredients of one homemade recipe for a personal food log.
+
+Rules:
+- Each ingredient line or ingredient photo is food that goes into the whole batch. Estimate the full amount described or shown, not a single bite of the finished dish.
+- If a Nutrition Facts label is readable, use those numbers. If the label is not readable but the brand and package size are clear, use that brand's published values for the amount used. A whole package that is the ingredient counts as the whole package.
+- The finished-dish photo, when one is included, is only a sanity check. Do not replace the ingredient totals with a guess from how the finished dish looks. Use notes to say if the dish looks inconsistent with the ingredients.
+- Return one item per ingredient, with the amount for the whole batch. Do not divide by servings.
+- portionLabel names that ingredient amount, such as "2 cups" or "1 lb".
+- confidence is "high" when amounts come from a label, a package, or a clear measurement, and "medium" for a typical estimate.
+- notes: one or two short sentences on the batch. Say that the numbers are for the whole batch.
+- excluded: anything in the photos that is not part of this recipe. Use an empty array when everything counted.
+- barcode: empty string. Do not guess a barcode.
+- Do not include totals.
+- If there are no real ingredients, return an empty items array.`;
+
+export function recipeUserPrompt(input: { lines: string[]; ingredientPhotos: number; dishPhoto: boolean }): string {
+  const lines = input.lines.length > 0 ? input.lines.map((line, index) => `${index + 1}. ${line}`).join("\n") : "No typed lines.";
+  const photos =
+    input.ingredientPhotos > 0
+      ? `The next ${input.ingredientPhotos} photo${input.ingredientPhotos === 1 ? "" : "s"} show the ingredients, in order.`
+      : "There are no ingredient photos.";
+  const dish = input.dishPhoto
+    ? "The last photo is the finished dish. Use it only as a sanity check."
+    : "There is no finished-dish photo.";
+  return `Total this recipe batch.\n\nIngredients:\n${lines}\n\n${photos}\n${dish}`;
+}

@@ -1,9 +1,9 @@
 import { MEAL_JSON_SCHEMA } from "../json-schema.js";
 import { extractJson } from "../json.js";
 import { ProviderError } from "../errors.js";
-import { SYSTEM_PROMPT, TEXT_SYSTEM_PROMPT, textUserPrompt, USER_PROMPT } from "../prompt.js";
+import { RECIPE_SYSTEM_PROMPT, recipeUserPrompt, SYSTEM_PROMPT, TEXT_SYSTEM_PROMPT, textUserPrompt, USER_PROMPT } from "../prompt.js";
 import { providerMessage } from "./openai.js";
-import type { FetchLike, VisionImage, VisionProvider } from "./types.js";
+import type { FetchLike, RecipeVisionRequest, VisionImage, VisionProvider } from "./types.js";
 
 const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 
@@ -79,9 +79,12 @@ export function createGeminiProvider(options: {
     analyzeText(text) {
       return runChain((model) => requestText(fetchImpl, options.apiKey, model, text), "text");
     },
+    analyzeRecipe(request) {
+      return runChain((model) => requestRecipe(fetchImpl, options.apiKey, model, request), "recipe");
+    },
   };
 
-  async function runChain(call: (model: string) => Promise<unknown>, kind: "vision" | "text"): Promise<unknown> {
+  async function runChain(call: (model: string) => Promise<unknown>, kind: "vision" | "text" | "recipe"): Promise<unknown> {
     const started = now();
     const chain = [options.model, ...fallbacks];
     let sawBusy = false;
@@ -124,6 +127,23 @@ async function requestModel(fetchImpl: FetchLike, apiKey: string, model: string,
 
 async function requestText(fetchImpl: FetchLike, apiKey: string, model: string, description: string): Promise<unknown> {
   return requestGemini(fetchImpl, apiKey, model, TEXT_SYSTEM_PROMPT, [{ text: textUserPrompt(description) }]);
+}
+
+async function requestRecipe(fetchImpl: FetchLike, apiKey: string, model: string, request: RecipeVisionRequest): Promise<unknown> {
+  const ingredientPhotos = request.images.filter((image) => image.role === "ingredient").length;
+  const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
+    {
+      text: recipeUserPrompt({
+        lines: request.lines,
+        ingredientPhotos,
+        dishPhoto: request.images.some((image) => image.role === "dish"),
+      }),
+    },
+  ];
+  for (const image of request.images) {
+    parts.push({ inlineData: { mimeType: image.mimeType, data: image.imageBase64 } });
+  }
+  return requestGemini(fetchImpl, apiKey, model, RECIPE_SYSTEM_PROMPT, parts);
 }
 
 async function requestGemini(

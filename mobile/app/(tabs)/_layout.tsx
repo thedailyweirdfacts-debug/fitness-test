@@ -15,6 +15,7 @@ type TabBarProps = {
 const TABS = {
   index: { label: "Scan", icon: "camera-outline" as const },
   log: { label: "Log", icon: "book-outline" as const },
+  foods: { label: "Foods", icon: "restaurant-outline" as const },
   history: { label: "History", icon: "calendar-outline" as const },
 };
 
@@ -26,6 +27,7 @@ export default function TabsLayout() {
     >
       <Tabs.Screen name="index" options={{ title: "Scan" }} />
       <Tabs.Screen name="log" options={{ title: "Log" }} />
+      <Tabs.Screen name="foods" options={{ title: "Foods" }} />
       <Tabs.Screen name="history" options={{ title: "History" }} />
     </Tabs>
   );

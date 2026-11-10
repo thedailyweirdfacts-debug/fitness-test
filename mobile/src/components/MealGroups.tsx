@@ -41,9 +41,11 @@ export function MealGroups({
                     <Text style={styles.mealNames} numberOfLines={2}>
                       {names}
                     </Text>
-                    {meal.source !== "vision" ? (
-                      <Text style={styles.sampleTag}>{meal.source === "sample" ? "Saved sample" : "Demo estimate"}</Text>
-                    ) : null}
+                    {meal.source === "vision" ? null : (
+                      <Text style={styles.sampleTag}>
+                        {meal.source === "recipe" ? "Saved recipe" : meal.source === "sample" ? "Saved sample" : "Demo estimate"}
+                      </Text>
+                    )}
                   </View>
                   <Text style={styles.mealKcal}>{view.totals.calories}</Text>
                 </Pressable>

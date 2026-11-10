@@ -9,6 +9,7 @@ export {
   mealSourceSchema,
   mealTypeSchema,
   modelOutputSchema,
+  recipeSchema,
 } from "./schema.js";
 export type {
   AnalysisItem,
@@ -20,6 +21,7 @@ export type {
   MealSource,
   MealType,
   ModelOutput,
+  Recipe,
 } from "./schema.js";
 
 export {
@@ -70,6 +72,15 @@ export {
 export type { PresentedItem } from "./nutrition.js";
 
 export { EMPTY_MACROS, addDays, dailyTotals, dayKeyFromDate, formatDayLabel, mealsForDay } from "./dates.js";
+
+export {
+  bakeRecipeItems,
+  createRecipeId,
+  demoRecipeAnalysis,
+  parseRecipeList,
+  portionFromRecipe,
+  recipeShareTotals,
+} from "./recipes.js";
 
 export {
   FRIES_MEAL,

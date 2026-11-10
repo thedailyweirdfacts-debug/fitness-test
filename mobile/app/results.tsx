@@ -92,7 +92,13 @@ export default function ResultsScreen() {
           )}
         </View>
 
-        {current.source !== "vision" ? (
+        {current.source === "recipe" ? (
+          <View style={styles.banner}>
+            <Text style={styles.bannerTitle}>Saved recipe</Text>
+            <Text style={styles.bannerCopy}>These numbers were copied from the recipe when you logged this serving.</Text>
+          </View>
+        ) : null}
+        {current.source === "demo" || current.source === "sample" ? (
           <View style={styles.banner}>
             <Text style={styles.bannerTitle}>Sample estimate</Text>
             <Text style={styles.bannerCopy}>
