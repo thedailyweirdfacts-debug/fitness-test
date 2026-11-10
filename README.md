@@ -1,10 +1,10 @@
 # Plateful
 
-Snap a photo of your plate and get a rough calorie and macro estimate. One Expo app runs on iPhone and Android. A small server calls a vision model. The model key stays on the server.
+Snap a photo of your plate, or type what you ate, and get a rough calorie and macro estimate. One Expo app runs on iPhone and Android. A small server calls a vision model. The model key stays on the server.
 
 The default model is **Google Gemini 3.8 Flash**, on the free Google AI Studio tier. No credit card. OpenAI and Anthropic still work if you set them later.
 
-Demo mode needs no key. It walks through photo → results → daily log with two real meals.
+Demo mode needs no key. It walks through a photo or a typed meal → results → daily log with two real meals. A typed meal has no photo.
 
 ## Do this once, in order (Windows, free, no credit card)
 

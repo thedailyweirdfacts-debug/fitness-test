@@ -9,6 +9,7 @@ export interface VisionProvider {
   id: "gemini" | "openai" | "anthropic";
   model: string;
   analyze(image: VisionImage): Promise<unknown>;
+  analyzeText?(text: string): Promise<unknown>;
 }
 
 export type ProviderId = VisionProvider["id"];

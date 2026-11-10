@@ -3,7 +3,7 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   buildRewardReport,
@@ -17,7 +17,7 @@ import {
 } from "../../../shared/src";
 import { GoalProgress } from "../../src/components/GoalProgress";
 import { MacroLine, PlateArt } from "../../src/components/ui";
-import { AnalyzeError, analyzeImage } from "../../src/lib/api";
+import { AnalyzeError, analyzeImage, analyzeMealText } from "../../src/lib/api";
 import { draftFromAnalysis } from "../../src/lib/draft";
 import { preparePlatePhoto } from "../../src/lib/photos";
 import { resolveAppSecret } from "../../src/lib/settings";
@@ -32,6 +32,8 @@ export default function ScanScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const [writing, setWriting] = useState(false);
+  const [mealText, setMealText] = useState("");
   const todayKey = dayKeyFromDate(new Date());
   const today = dailyTotals(meals, todayKey);
   const hasToday = meals.some((meal) => dayKeyFromDate(new Date(meal.loggedAt)) === todayKey);
@@ -120,6 +122,51 @@ export default function ScanScreen() {
     }
   }
 
+  async function submitText() {
+    setError(null);
+    const text = mealText.trim();
+    if (!text) {
+      setError("Describe what you ate.");
+      return;
+    }
+    if (!settings.useDemoMode && settings.apiBaseUrl && !session) {
+      router.push("/auth");
+      return;
+    }
+    if (!settings.useDemoMode && settings.apiBaseUrl && scansRemaining === 0) {
+      setError("No free scans left today. They reset overnight, Pacific time. Demo mode still works.");
+      return;
+    }
+    setPreview(null);
+    setBusy(settings.useDemoMode || !settings.apiBaseUrl ? "Using a sample meal…" : "Estimating that meal…");
+    if (Platform.OS !== "web") {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
+    }
+    try {
+      if (settings.useDemoMode || !settings.apiBaseUrl) {
+        const sample = mockSampleForSeed(text);
+        openDraft(draftFromAnalysis(sample.analysis, { photoUri: null, source: "demo", sampleId: sample.id }));
+      } else {
+        const result = await analyzeMealText(
+          settings.apiBaseUrl,
+          text,
+          resolveAppSecret(settings.appSecret),
+          session?.accessToken ?? "",
+        );
+        noteScansRemaining(result.scansRemaining);
+        openDraft(draftFromAnalysis(result.analysis, { photoUri: null, source: "vision", sampleId: null }));
+      }
+      setMealText("");
+      setWriting(false);
+      router.push("/results");
+    } catch (caught) {
+      const message = caught instanceof AnalyzeError ? caught.message : "Something went wrong while estimating that meal.";
+      setError(message);
+    } finally {
+      setBusy(null);
+    }
+  }
+
   function openSample(id: (typeof SAMPLE_ORDER)[number]) {
     setError(null);
     openDraft(
@@ -138,7 +185,7 @@ export default function ScanScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.wordmark}>Plateful</Text>
-            <Text style={styles.tagline}>Snap your plate. See a rough breakdown.</Text>
+            <Text style={styles.tagline}>Snap a plate, or type what you ate.</Text>
             {session && !settings.useDemoMode ? (
               <Text style={styles.scans}>
                 {scansRemaining == null ? "Checking free scans…" : `${scansRemaining} free scans left today`}
@@ -158,7 +205,7 @@ export default function ScanScreen() {
         {syncError ? <Text style={styles.error}>{syncError}</Text> : null}
         {!session && !settings.useDemoMode && settings.apiBaseUrl ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Sign in" onPress={() => router.push("/auth")} style={styles.signIn}>
-            <Text style={styles.signInText}>Sign in to scan a plate</Text>
+            <Text style={styles.signInText}>Sign in to log a meal</Text>
           </Pressable>
         ) : null}
 
@@ -205,11 +252,50 @@ export default function ScanScreen() {
           <Text style={styles.galleryText}>Choose from gallery</Text>
         </Pressable>
 
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Type what you ate"
+          disabled={busy !== null}
+          onPress={() => {
+            setError(null);
+            setWriting(true);
+          }}
+          style={({ pressed }) => [styles.gallery, pressed && styles.pressed]}
+        >
+          <Ionicons name="create-outline" size={18} color={colors.ink} />
+          <Text style={styles.galleryText}>Type what you ate</Text>
+        </Pressable>
+
+        {writing ? (
+          <View style={styles.composer}>
+            <TextInput
+              accessibilityLabel="Meal description"
+              value={mealText}
+              onChangeText={setMealText}
+              multiline
+              maxLength={500}
+              placeholder="Chick-fil-A grilled chicken sandwich with a medium fry"
+              placeholderTextColor={colors.muted}
+              style={styles.composerInput}
+              textAlignVertical="top"
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Estimate this meal"
+              disabled={busy !== null}
+              onPress={() => void submitText()}
+              style={({ pressed }) => [styles.estimate, pressed && styles.pressed]}
+            >
+              <Text style={styles.estimateText}>Estimate this meal</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         {settings.useDemoMode ? (
           <View style={styles.demo}>
             <Text style={styles.demoTitle}>Demo mode is on</Text>
             <Text style={styles.demoCopy}>
-              Photos aren't sent anywhere. You'll get one of two saved example meals so you can try the whole flow. Turn this off in Settings once your server is running.
+              Photos and typed meals stay on this phone. You'll get one of two saved example meals so you can try the whole flow. Turn this off in Settings once your server is running.
             </Text>
             <View style={styles.samples}>
               {SAMPLE_ORDER.map((id) => (
@@ -369,6 +455,33 @@ const styles = StyleSheet.create({
   },
   galleryText: {
     color: colors.ink,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  composer: {
+    gap: 10,
+  },
+  composerInput: {
+    minHeight: 110,
+    borderRadius: 16,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.line,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: colors.ink,
+    fontSize: 16,
+    lineHeight: 22,
+  },
+  estimate: {
+    minHeight: 48,
+    borderRadius: 16,
+    backgroundColor: colors.green,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  estimateText: {
+    color: colors.white,
     fontSize: 16,
     fontWeight: "700",
   },

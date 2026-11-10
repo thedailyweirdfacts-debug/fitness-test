@@ -1,7 +1,7 @@
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { quotaDayKey } from "../../shared/src/account.js";
 import { bearerToken, type QuotaStore, type VerifiedUser } from "./accounts.js";
-import { analyzeRequest, PHOTO_TOO_LARGE_MESSAGE } from "./analyze.js";
+import { analyzeRequest, analyzeTextRequest, PHOTO_TOO_LARGE_MESSAGE } from "./analyze.js";
 import { HttpError } from "./errors.js";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.js";
 import { SECRET_HEADER, secretMatches } from "./secret.js";
@@ -92,17 +92,22 @@ export async function handleRequest(
     };
   }
 
-  if (input.pathname !== "/api/analyze" && input.pathname !== "/api/quota") {
+  const isPhoto = input.pathname === "/api/analyze";
+  const isText = input.pathname === "/api/analyze-text";
+  if (!isPhoto && !isText && input.pathname !== "/api/quota") {
     throw new HttpError(404, "not_found", "Nothing is mounted at that path.");
   }
-  if (input.pathname === "/api/analyze" && input.method !== "POST") {
+  if (isPhoto && input.method !== "POST") {
     throw new HttpError(405, "method_not_allowed", "Use POST to estimate a meal.");
+  }
+  if (isText && input.method !== "POST") {
+    throw new HttpError(405, "method_not_allowed", "Use POST to estimate a typed meal.");
   }
   if (input.pathname === "/api/quota" && input.method !== "GET") {
     throw new HttpError(405, "method_not_allowed", "Use GET to read today's scans.");
   }
 
-  const body = input.pathname === "/api/analyze" ? await input.readBody() : null;
+  const body = isPhoto || isText ? await input.readBody() : null;
   const user = await requireUser(options, input.header);
   const day = quotaDayKey(new Date());
   const cap = options.dailyCap ?? 10;
@@ -142,7 +147,7 @@ export async function handleRequest(
   }
 
   try {
-    const analysis = await analyzeRequest(body, options.provider);
+    const analysis = isText ? await analyzeTextRequest(body, options.provider) : await analyzeRequest(body, options.provider);
     return {
       status: 200,
       body: analysis,
