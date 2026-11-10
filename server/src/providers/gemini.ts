@@ -10,10 +10,10 @@ const GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 /**
  * Image-capable models from the Gemini API model list (checked November 2026):
  * https://ai.google.dev/gemini-api/docs/models
- * 3.6 Flash is the previous stable multimodal Flash. 3.5 Flash-Lite is the
- * high-throughput model with the larger free daily quota.
+ * Flash-Lite is the primary because the free tier allows more requests per day.
+ * If it is busy, try the other Flash-Lite, then the fuller Flash models.
  */
-export const DEFAULT_GEMINI_FALLBACK_MODELS = ["gemini-3.6-flash", "gemini-3.5-flash-lite"] as const;
+export const DEFAULT_GEMINI_FALLBACK_MODELS = ["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.6-flash"] as const;
 
 /** One short wait before the second try of the primary model. */
 export const GEMINI_RETRY_DELAY_MS = 750;

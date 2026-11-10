@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { Server } from "node:http";
-import { quotaDayKey } from "../../shared/src/account.js";
+import { DEFAULT_SCAN_CAP, quotaDayKey } from "../../shared/src/account.js";
 import { createMemoryQuota, type QuotaStore } from "./accounts.js";
 import { ProviderError } from "./errors.js";
 import { createRateLimiter } from "./rate-limit.js";
@@ -64,7 +64,7 @@ describe("POST /api/analyze", () => {
       model: "gemini-3.8-flash",
       appSecret: extra && "appSecret" in extra ? extra.appSecret : SECRET,
       bodyLimit: extra?.bodyLimit,
-      dailyCap: extra?.dailyCap ?? 10,
+      dailyCap: extra?.dailyCap ?? DEFAULT_SCAN_CAP,
       rateLimiter: createRateLimiter({ perMinute: extra?.perMinute ?? 5, perDay: 60 }),
       verifyUser: accounts
         ? async (token) => (token === "user-a" || token === "user-b" ? { userId: token } : null)

@@ -1,5 +1,5 @@
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { quotaDayKey } from "../../shared/src/account.js";
+import { DEFAULT_SCAN_CAP, quotaDayKey } from "../../shared/src/account.js";
 import { bearerToken, type QuotaStore, type VerifiedUser } from "./accounts.js";
 import { analyzeRequest, analyzeTextRequest, PHOTO_TOO_LARGE_MESSAGE } from "./analyze.js";
 import { estimatePreparedRecipe, prepareRecipe } from "./recipe.js";
@@ -130,7 +130,7 @@ export async function handleRequest(
   const body = isPhoto || isText ? await input.readBody() : null;
   const user = await requireUser(options, input.header);
   const day = quotaDayKey(new Date());
-  const cap = options.dailyCap ?? 10;
+  const cap = options.dailyCap ?? DEFAULT_SCAN_CAP;
 
   if (input.pathname === "/api/quota") {
     const status = await options.quota!.status(user.userId, day, cap);
@@ -214,7 +214,7 @@ async function estimateRecipe(
   }
 
   const day = quotaDayKey(new Date());
-  const cap = options.dailyCap ?? 10;
+  const cap = options.dailyCap ?? DEFAULT_SCAN_CAP;
   let remaining: number;
   try {
     remaining = await options.quota!.consume(user.userId, day, cap);

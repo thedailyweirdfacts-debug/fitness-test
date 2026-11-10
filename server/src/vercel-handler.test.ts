@@ -27,7 +27,7 @@ describe("Vercel handler request shape", () => {
     expect(result).toBeUndefined();
     expect(status).toBe(200);
     const body = JSON.parse(raw) as { ok?: boolean; provider?: string; model?: string };
-    expect(body).toMatchObject({ ok: true, provider: "gemini", model: "gemini-3.8-flash" });
+    expect(body).toMatchObject({ ok: true, provider: "gemini", model: "gemini-3.5-flash-lite" });
     expect(raw).not.toMatch(/api[_-]?key|service_role/i);
     expect(headers["Content-Type"]).toContain("application/json");
   });

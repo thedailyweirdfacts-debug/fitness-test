@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { migrationPlan, parseAuthCallback, quotaDayKey } from "./account.js";
+import { DEFAULT_SCAN_CAP, migrationPlan, parseAuthCallback, quotaDayKey } from "./account.js";
 
 describe("account sync", () => {
+  it("allows 30 scans per person per Pacific day", () => {
+    expect(DEFAULT_SCAN_CAP).toBe(30);
+  });
+
   it("uses the Pacific day, matching the Gemini free-tier reset", () => {
     expect(quotaDayKey(new Date("2026-11-10T07:30:00Z"))).toBe("2026-11-09");
     expect(quotaDayKey(new Date("2026-11-10T08:30:00Z"))).toBe("2026-11-10");
