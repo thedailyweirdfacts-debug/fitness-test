@@ -37,6 +37,14 @@
           "photosPermission": "Plateful uses your photos so you can log a meal from a picture you already took.",
           "cameraPermission": "Plateful uses the camera to estimate what's on your plate."
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#F6F1E8",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200
+        }
       ]
     ]
   }

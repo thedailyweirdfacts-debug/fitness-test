@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
-import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
+  buildRewardReport,
   dailyTotals,
   dayKeyFromDate,
   getSample,
@@ -14,10 +15,12 @@ import {
   sampleBlurb,
   sampleTitle,
 } from "../../../shared/src";
+import { GoalProgress } from "../../src/components/GoalProgress";
 import { MacroLine, PlateArt } from "../../src/components/ui";
 import { AnalyzeError, analyzeImage } from "../../src/lib/api";
 import { draftFromAnalysis } from "../../src/lib/draft";
 import { preparePlatePhoto } from "../../src/lib/photos";
+import { resolveAppSecret } from "../../src/lib/settings";
 import { useApp } from "../../src/state/AppContext";
 import { colors, displayFont, shadow } from "../../src/theme";
 import { formatAmount } from "../../src/components/ui";
@@ -25,15 +28,39 @@ import { formatAmount } from "../../src/components/ui";
 export default function ScanScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { settings, meals, openDraft } = useApp();
+  const { settings, meals, openDraft, session, scansRemaining, refreshQuota, noteScansRemaining, syncError } = useApp();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
-  const today = dailyTotals(meals, dayKeyFromDate(new Date()));
-  const hasToday = meals.some((meal) => dayKeyFromDate(new Date(meal.loggedAt)) === dayKeyFromDate(new Date()));
+  const todayKey = dayKeyFromDate(new Date());
+  const today = dailyTotals(meals, todayKey);
+  const hasToday = meals.some((meal) => dayKeyFromDate(new Date(meal.loggedAt)) === todayKey);
+  const report = buildRewardReport(
+    meals,
+    {
+      calorieGoal: settings.calorieGoal,
+      proteinGoal: settings.proteinGoal,
+      windowPercent: settings.goalWindowPercent,
+    },
+    todayKey,
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (session && !settings.useDemoMode) void refreshQuota();
+    }, [session, settings.useDemoMode, refreshQuota]),
+  );
 
   async function choose(source: "camera" | "library") {
     setError(null);
+    if (!settings.useDemoMode && settings.apiBaseUrl && !session) {
+      router.push("/auth");
+      return;
+    }
+    if (!settings.useDemoMode && settings.apiBaseUrl && scansRemaining === 0) {
+      setError("No free scans left today. They reset overnight, Pacific time. Demo mode still works.");
+      return;
+    }
     const permission =
       source === "camera"
         ? await ImagePicker.requestCameraPermissionsAsync()
@@ -75,8 +102,14 @@ export default function ScanScreen() {
         openDraft(draftFromAnalysis(sample.analysis, { photoUri, source: "demo", sampleId: sample.id }));
       } else {
         if (!prepared) throw new AnalyzeError("That photo couldn't be prepared. Try another one.", "bad_response");
-        const analysis = await analyzeImage(settings.apiBaseUrl, prepared);
-        openDraft(draftFromAnalysis(analysis, { photoUri, source: "vision", sampleId: null }));
+        const result = await analyzeImage(
+          settings.apiBaseUrl,
+          prepared,
+          resolveAppSecret(settings.appSecret),
+          session?.accessToken ?? "",
+        );
+        noteScansRemaining(result.scansRemaining);
+        openDraft(draftFromAnalysis(result.analysis, { photoUri, source: "vision", sampleId: null }));
       }
       router.push("/results");
     } catch (caught) {
@@ -106,6 +139,11 @@ export default function ScanScreen() {
           <View>
             <Text style={styles.wordmark}>Plateful</Text>
             <Text style={styles.tagline}>Snap your plate. See a rough breakdown.</Text>
+            {session && !settings.useDemoMode ? (
+              <Text style={styles.scans}>
+                {scansRemaining == null ? "Checking free scans…" : `${scansRemaining} free scans left today`}
+              </Text>
+            ) : null}
           </View>
           <Pressable
             accessibilityRole="button"
@@ -116,6 +154,13 @@ export default function ScanScreen() {
             <Ionicons name="settings-outline" size={22} color={colors.ink} />
           </Pressable>
         </View>
+
+        {syncError ? <Text style={styles.error}>{syncError}</Text> : null}
+        {!session && !settings.useDemoMode && settings.apiBaseUrl ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Sign in" onPress={() => router.push("/auth")} style={styles.signIn}>
+            <Text style={styles.signInText}>Sign in to scan a plate</Text>
+          </Pressable>
+        ) : null}
 
         <Pressable accessibilityRole="button" accessibilityLabel="Open today's log" onPress={() => router.push("/log")} style={styles.today}>
           <Text style={styles.kicker}>Today</Text>
@@ -130,6 +175,9 @@ export default function ScanScreen() {
           ) : (
             <Text style={styles.todayEmpty}>Nothing logged yet. Your running total will show up here.</Text>
           )}
+          {settings.calorieGoal != null ? (
+            <GoalProgress status={report.today} currentStreak={report.currentStreak} bestStreak={report.bestStreak} />
+          ) : null}
         </Pressable>
 
         <Pressable
@@ -217,6 +265,22 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 15,
     marginTop: 2,
+  },
+  scans: {
+    color: colors.greenDark,
+    fontSize: 14,
+    fontWeight: "700",
+    marginTop: 6,
+  },
+  signIn: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    padding: 14,
+  },
+  signInText: {
+    color: colors.greenDark,
+    fontWeight: "700",
+    fontSize: 15,
   },
   gear: {
     width: 42,

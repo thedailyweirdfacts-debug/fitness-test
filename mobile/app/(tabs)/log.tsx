@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { addDays, dailyTotals, dayKeyFromDate, formatDayLabel, mealsForDay, presentMeal } from "../../../shared/src";
+import { addDays, buildRewardReport, dailyTotals, dayKeyFromDate, formatDayLabel } from "../../../shared/src";
+import { GoalProgress } from "../../src/components/GoalProgress";
+import { MealGroups } from "../../src/components/MealGroups";
 import { MacroLine, PlateArt } from "../../src/components/ui";
 import { confirm } from "../../src/lib/confirm";
 import { draftFromMeal } from "../../src/lib/draft";
@@ -13,14 +15,23 @@ import { colors, displayFont } from "../../src/theme";
 export default function LogScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { meals, openDraft, deleteMeal } = useApp();
+  const { meals, settings, openDraft, deleteMeal, updateMealType } = useApp();
   const today = dayKeyFromDate(new Date());
   const [day, setDay] = useState(today);
-  const visible = mealsForDay(meals, day);
   const totals = dailyTotals(meals, day);
+  const report = buildRewardReport(
+    meals,
+    {
+      calorieGoal: settings.calorieGoal,
+      proteinGoal: settings.proteinGoal,
+      windowPercent: settings.goalWindowPercent,
+    },
+    today,
+  );
+  const dayMeals = meals.filter((meal) => dayKeyFromDate(new Date(meal.loggedAt)) === day);
 
   async function remove(id: string) {
-    const ok = await confirm("Remove this meal?", "It will leave today's running total.");
+    const ok = await confirm("Remove this meal?", "It will leave that day's total.");
     if (ok) await deleteMeal(id);
   }
 
@@ -53,47 +64,27 @@ export default function LogScreen() {
           <Text style={styles.unit}>kcal</Text>
         </View>
         <MacroLine totals={totals} />
+        {day === today && settings.calorieGoal != null ? (
+          <GoalProgress status={report.today} currentStreak={report.currentStreak} bestStreak={report.bestStreak} />
+        ) : null}
       </View>
 
-      {visible.length === 0 ? (
+      {dayMeals.length === 0 ? (
         <View style={styles.empty}>
           <PlateArt kind="empty" />
           <Text style={styles.emptyTitle}>No meals this day</Text>
-          <Text style={styles.emptyCopy}>A saved plate will land here with its calories and macros.</Text>
+          <Text style={styles.emptyCopy}>A saved plate will land here, grouped as breakfast, lunch, dinner, or a snack.</Text>
         </View>
       ) : (
-        visible.map((meal) => {
-          const view = presentMeal(meal.items);
-          const names = view.items.map((item) => item.name).join(", ");
-          return (
-            <View key={meal.id} style={styles.meal}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Open ${names}`}
-                onPress={() => {
-                  openDraft(draftFromMeal(meal));
-                  router.push("/results");
-                }}
-                style={styles.mealMain}
-              >
-                <MealThumb uri={meal.photoUri} />
-                <View style={styles.mealText}>
-                  <Text style={styles.mealTime}>{formatTime(meal.loggedAt)}</Text>
-                  <Text style={styles.mealNames} numberOfLines={2}>
-                    {names}
-                  </Text>
-                  {meal.source !== "vision" ? (
-                    <Text style={styles.sampleTag}>{meal.source === "sample" ? "Saved sample" : "Demo estimate"}</Text>
-                  ) : null}
-                </View>
-                <Text style={styles.mealKcal}>{view.totals.calories}</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel="Remove meal" onPress={() => remove(meal.id)} style={styles.remove}>
-                <Text style={styles.removeText}>Remove</Text>
-              </Pressable>
-            </View>
-          );
-        })
+        <MealGroups
+          meals={dayMeals}
+          onOpen={(meal) => {
+            openDraft(draftFromMeal(meal));
+            router.push("/results");
+          }}
+          onDelete={(meal) => void remove(meal.id)}
+          onChangeType={(meal, type) => void updateMealType(meal.id, type)}
+        />
       )}
       {day !== today ? (
         <Pressable accessibilityRole="button" onPress={() => setDay(today)} style={styles.jump}>
@@ -102,22 +93,6 @@ export default function LogScreen() {
       ) : null}
     </ScrollView>
   );
-}
-
-function MealThumb({ uri }: { uri: string | null }) {
-  const [failed, setFailed] = useState(false);
-  if (uri && !failed) {
-    return <Image source={{ uri }} style={styles.thumb} onError={() => setFailed(true)} />;
-  }
-  return (
-    <View style={styles.thumbFallback}>
-      <Text style={styles.thumbMark}>Plate</Text>
-    </View>
-  );
-}
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
 function prettyDate(day: string): string {
@@ -216,73 +191,6 @@ const styles = StyleSheet.create({
     color: colors.muted,
     textAlign: "center",
     lineHeight: 20,
-  },
-  meal: {
-    backgroundColor: colors.card,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: colors.line,
-    overflow: "hidden",
-  },
-  mealMain: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 12,
-  },
-  thumb: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: colors.line,
-  },
-  thumbFallback: {
-    width: 64,
-    height: 64,
-    borderRadius: 16,
-    backgroundColor: colors.greenSoft,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  thumbMark: {
-    color: colors.greenDark,
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  mealText: {
-    flex: 1,
-    gap: 2,
-  },
-  mealTime: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  mealNames: {
-    color: colors.ink,
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  sampleTag: {
-    color: colors.greenDark,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  mealKcal: {
-    color: colors.calorie,
-    fontWeight: "800",
-    fontSize: 16,
-  },
-  remove: {
-    borderTopWidth: 1,
-    borderTopColor: colors.line,
-    alignItems: "center",
-    paddingVertical: 10,
-  },
-  removeText: {
-    color: colors.danger,
-    fontWeight: "700",
-    fontSize: 13,
   },
   jump: {
     alignItems: "center",

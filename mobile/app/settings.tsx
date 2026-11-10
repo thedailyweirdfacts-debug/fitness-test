@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { parseGoalInput } from "../../shared/src";
 import { PrimaryButton } from "../src/components/ui";
 import { checkHealth, type HealthReport } from "../src/lib/api";
 import { normalizeApiBaseUrl } from "../src/lib/settings";
@@ -12,12 +13,25 @@ import { colors, displayFont } from "../src/theme";
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { settings, saveSettings } = useApp();
+  const { settings, saveSettings, session, signOut, syncError } = useApp();
   const [useDemoMode, setUseDemoMode] = useState(settings.useDemoMode);
   const [apiBaseUrl, setApiBaseUrl] = useState(settings.apiBaseUrl);
+  const [appSecret, setAppSecret] = useState(settings.appSecret);
+  const [calorieText, setCalorieText] = useState(settings.calorieGoal?.toString() ?? "");
+  const [proteinText, setProteinText] = useState(settings.proteinGoal?.toString() ?? "");
+  const [goalWindowPercent, setGoalWindowPercent] = useState(settings.goalWindowPercent);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setUseDemoMode(settings.useDemoMode);
+    setApiBaseUrl(settings.apiBaseUrl);
+    setAppSecret(settings.appSecret);
+    setCalorieText(settings.calorieGoal?.toString() ?? "");
+    setProteinText(settings.proteinGoal?.toString() ?? "");
+    setGoalWindowPercent(settings.goalWindowPercent);
+  }, [settings]);
 
   async function save() {
     const url = normalizeApiBaseUrl(apiBaseUrl);
@@ -29,10 +43,27 @@ export default function SettingsScreen() {
       setError("The address should start with http:// or https://.");
       return;
     }
+    const calorieGoal = parseGoalInput(calorieText, 20000);
+    const proteinGoal = parseGoalInput(proteinText, 1000);
+    if (calorieGoal === "invalid") {
+      setError("Use a calorie goal between 1 and 20000, or leave it blank.");
+      return;
+    }
+    if (proteinGoal === "invalid") {
+      setError("Use a protein goal between 1 and 1000 grams, or leave it blank.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      await saveSettings({ useDemoMode, apiBaseUrl: url });
+      await saveSettings({
+        useDemoMode,
+        apiBaseUrl: url,
+        appSecret: appSecret.trim(),
+        calorieGoal,
+        proteinGoal,
+        goalWindowPercent,
+      });
       setStatus("Saved.");
     } catch {
       setError("Couldn't save settings on this device.");
@@ -65,8 +96,75 @@ export default function SettingsScreen() {
       </Pressable>
       <Text style={styles.title}>Settings</Text>
       <Text style={styles.lead}>
-        The app never holds an API key. It only knows where your server is. The server reads the key from its own environment.
+        The Gemini key stays on the server. Sign in so your meals stay with you. An optional shared password can add one more lock on the server.
       </Text>
+
+      <View style={styles.card}>
+        <Text style={styles.rowTitle}>Account</Text>
+        {session ? (
+          <>
+            <Text style={styles.rowCopy}>Signed in as {session.email}. Your log, goals, streaks, and badges sync with this account.</Text>
+            {syncError ? <Text style={styles.rowCopy}>{syncError}</Text> : null}
+            <Pressable accessibilityRole="button" accessibilityLabel="Log out" onPress={() => void signOut()} style={styles.link}>
+              <Text style={styles.linkText}>Log out</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Text style={styles.rowCopy}>
+              Create an account to keep meals after a reinstall. Demo mode still works without one, and it stays on this phone.
+            </Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Sign in" onPress={() => router.push("/auth")} style={styles.link}>
+              <Text style={styles.linkText}>Sign in or create an account</Text>
+            </Pressable>
+          </>
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.rowTitle}>Daily calorie goal</Text>
+        <Text style={styles.rowCopy}>
+          Optional. Leave it blank and the goal stays off. A day counts when the total lands inside the window, so a much larger day does not count.
+        </Text>
+        <TextInput
+          value={calorieText}
+          onChangeText={setCalorieText}
+          keyboardType="number-pad"
+          placeholder="2000"
+          placeholderTextColor={colors.faint}
+          style={styles.input}
+          accessibilityLabel="Daily calorie goal"
+        />
+        <Text style={styles.rowTitle}>Protein goal</Text>
+        <Text style={styles.rowCopy}>Also optional. Meeting it is a bonus, not a requirement for the streak.</Text>
+        <TextInput
+          value={proteinText}
+          onChangeText={setProteinText}
+          keyboardType="number-pad"
+          placeholder="Grams"
+          placeholderTextColor={colors.faint}
+          style={styles.input}
+          accessibilityLabel="Protein goal"
+        />
+        <Text style={styles.rowTitle}>Window</Text>
+        <View style={styles.chips}>
+          {[5, 10, 15, 20].map((percent) => {
+            const selected = goalWindowPercent === percent;
+            return (
+              <Pressable
+                key={percent}
+                accessibilityRole="button"
+                accessibilityLabel={`Within ${percent} percent`}
+                accessibilityState={{ selected }}
+                onPress={() => setGoalWindowPercent(percent)}
+                style={[styles.chip, selected && styles.chipOn]}
+              >
+                <Text style={[styles.chipText, selected && styles.chipTextOn]}>±{percent}%</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
 
       <View style={styles.card}>
         <View style={styles.row}>
@@ -100,6 +198,24 @@ export default function SettingsScreen() {
         <Pressable accessibilityRole="button" onPress={testConnection} style={styles.link}>
           <Text style={styles.linkText}>Check connection</Text>
         </Pressable>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.rowTitle}>App secret</Text>
+        <Text style={styles.rowCopy}>
+          The same password you set as APP_SECRET on the server. This is not the Gemini key. Leave it blank to use the one baked into this install.
+        </Text>
+        <TextInput
+          value={appSecret}
+          onChangeText={setAppSecret}
+          autoCapitalize="none"
+          autoCorrect={false}
+          secureTextEntry
+          placeholder="Shared password"
+          placeholderTextColor={colors.faint}
+          style={styles.input}
+          accessibilityLabel="App secret"
+        />
       </View>
 
       {status ? <Text style={styles.status}>{status}</Text> : null}
@@ -182,6 +298,30 @@ const styles = StyleSheet.create({
   linkText: {
     color: colors.greenDark,
     fontWeight: "700",
+  },
+  chips: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.bg,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  chipOn: {
+    backgroundColor: colors.green,
+    borderColor: colors.green,
+  },
+  chipText: {
+    color: colors.ink,
+    fontWeight: "700",
+  },
+  chipTextOn: {
+    color: colors.white,
   },
   status: {
     color: colors.greenDark,

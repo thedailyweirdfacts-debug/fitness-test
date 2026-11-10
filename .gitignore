@@ -5,6 +5,7 @@ coverage/
 server/.env
 mobile/.env
 .expo/
+.vercel/
 *.tsbuildinfo
 .DS_Store
 npm-debug.log*

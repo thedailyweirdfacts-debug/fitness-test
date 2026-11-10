@@ -2,6 +2,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { RewardHost } from "../src/components/RewardHost";
 import { LoadingBlock } from "../src/components/ui";
 import { AppProvider, useApp } from "../src/state/AppContext";
 import { colors, displayFont } from "../src/theme";
@@ -32,11 +33,15 @@ function RootNavigator() {
     );
   }
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
-      <Stack.Screen name="(tabs)" />
-      <Stack.Screen name="results" />
-      <Stack.Screen name="settings" />
-    </Stack>
+    <View style={styles.navigator}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="results" />
+        <Stack.Screen name="settings" />
+        <Stack.Screen name="auth" />
+      </Stack>
+      <RewardHost />
+    </View>
   );
 }
 
@@ -51,6 +56,9 @@ const styles = StyleSheet.create({
     width: "100%",
     maxWidth: 480,
     backgroundColor: colors.bg,
+  },
+  navigator: {
+    flex: 1,
   },
   loading: {
     flex: 1,

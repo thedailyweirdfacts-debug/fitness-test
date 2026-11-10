@@ -59,11 +59,14 @@ export const foodItemSchema = z
 
 export const mealSourceSchema = z.enum(["demo", "vision", "sample"]);
 
+export const mealTypeSchema = z.enum(["breakfast", "lunch", "dinner", "snack"]);
+
 export const loggedMealSchema = z
   .object({
     id: z.string().min(1),
     loggedAt: z.string().min(1),
     photoUri: z.string().nullable(),
+    mealType: mealTypeSchema,
     items: z.array(foodItemSchema).min(1).max(20),
     confidence: confidenceSchema,
     notes: z.string().max(500),
@@ -79,6 +82,7 @@ export type ModelOutput = z.infer<typeof modelOutputSchema>;
 export type MealAnalysis = z.infer<typeof mealAnalysisSchema>;
 export type FoodItem = z.infer<typeof foodItemSchema>;
 export type MealSource = z.infer<typeof mealSourceSchema>;
+export type MealType = z.infer<typeof mealTypeSchema>;
 export type LoggedMeal = z.infer<typeof loggedMealSchema>;
 
 export class AnalysisError extends Error {

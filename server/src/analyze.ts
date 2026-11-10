@@ -5,7 +5,7 @@ import type { VisionProvider } from "./providers/types";
 
 const requestSchema = z
   .object({
-    imageBase64: z.string().min(32).max(8_000_000),
+    imageBase64: z.string().min(32).max(3_500_000),
     mimeType: z.string().min(1).max(40),
   })
   .strict();

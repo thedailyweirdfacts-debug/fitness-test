@@ -3,8 +3,10 @@ import {
   itemsFromAnalysis,
   type FoodItem,
   type LoggedMeal,
+  mealTypeForTime,
   type MealAnalysis,
   type MealSource,
+  type MealType,
   type SampleId,
   type Confidence,
 } from "../../../shared/src";
@@ -20,6 +22,7 @@ export type Draft = {
   sampleId: SampleId | null;
   editingId: string | null;
   loggedAt: string | null;
+  mealType: MealType;
 };
 
 export function draftFromAnalysis(
@@ -41,6 +44,7 @@ export function draftFromAnalysis(
     sampleId: extra.sampleId,
     editingId: null,
     loggedAt: null,
+    mealType: mealTypeForTime(new Date()),
   };
 }
 
@@ -56,5 +60,6 @@ export function draftFromMeal(meal: LoggedMeal): Draft {
     sampleId: null,
     editingId: meal.id,
     loggedAt: meal.loggedAt,
+    mealType: meal.mealType,
   };
 }
