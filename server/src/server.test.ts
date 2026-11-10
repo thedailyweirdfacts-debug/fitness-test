@@ -3,6 +3,7 @@ import type { Server } from "node:http";
 import { createMemoryQuota, type QuotaStore } from "./accounts.js";
 import { ProviderError } from "./errors.js";
 import { createRateLimiter } from "./rate-limit.js";
+import { createGeminiProvider, SCANNER_BUSY_MESSAGE } from "./providers/gemini.js";
 import { createServer } from "./server.js";
 import type { VisionProvider } from "./providers/types.js";
 
@@ -222,5 +223,48 @@ describe("POST /api/analyze", () => {
 
     const quota = await fetch(`${base}/api/quota`, { headers: { Authorization: "Bearer user-a", "x-plateful-secret": SECRET } });
     expect(await quota.json()).toEqual({ used: 1, remaining: 0, limit: 1 });
+  });
+
+  it("keeps the scan when a backup model answers and refunds it when every model is busy", async () => {
+    const body = JSON.stringify({ imageBase64: "a".repeat(40), mimeType: "image/jpeg" });
+    const meal = JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(apple) }] } }] });
+    let calls = 0;
+    const backup = createGeminiProvider({
+      apiKey: "test-key",
+      model: "gemini-3.8-flash",
+      fallbackModels: ["gemini-3.6-flash"],
+      sleep: async () => undefined,
+      fetchImpl: async () => {
+        calls += 1;
+        if (calls < 3) {
+          return new Response(JSON.stringify({ error: { message: "high demand", status: "UNAVAILABLE" } }), { status: 503 });
+        }
+        return new Response(meal, { status: 200 });
+      },
+    });
+    const saved = await start(backup, { dailyCap: 1 });
+    const ok = await post(saved, body);
+    expect(ok.status).toBe(200);
+    const kept = await fetch(`${saved}/api/quota`, {
+      headers: { Authorization: "Bearer user-a", "x-plateful-secret": SECRET },
+    });
+    expect(await kept.json()).toEqual({ used: 1, remaining: 0, limit: 1 });
+
+    const busy = createGeminiProvider({
+      apiKey: "test-key",
+      model: "gemini-3.8-flash",
+      fallbackModels: ["gemini-3.6-flash"],
+      sleep: async () => undefined,
+      fetchImpl: async () =>
+        new Response(JSON.stringify({ error: { message: "overloaded", status: "UNAVAILABLE" } }), { status: 503 }),
+    });
+    const base = await start(busy, { dailyCap: 1 });
+    const failed = await post(base, body);
+    expect(failed.status).toBe(503);
+    expect(await failed.json()).toMatchObject({ error: "provider_busy", message: SCANNER_BUSY_MESSAGE });
+    const refunded = await fetch(`${base}/api/quota`, {
+      headers: { Authorization: "Bearer user-a", "x-plateful-secret": SECRET },
+    });
+    expect(await refunded.json()).toEqual({ used: 0, remaining: 1, limit: 1 });
   });
 });

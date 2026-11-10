@@ -1,5 +1,5 @@
 import { createAnthropicProvider } from "./providers/anthropic.js";
-import { createGeminiProvider } from "./providers/gemini.js";
+import { createGeminiProvider, geminiFallbackModels } from "./providers/gemini.js";
 import { createOpenAIProvider } from "./providers/openai.js";
 import { DEFAULT_MODELS, type FetchLike, type ProviderId, type VisionProvider } from "./providers/types.js";
 
@@ -7,6 +7,7 @@ export type VisionConfig = {
   providerId: ProviderId;
   apiKey: string | null;
   model: string;
+  fallbackModels?: string[];
 };
 
 const PROVIDERS: readonly ProviderId[] = ["gemini", "openai", "anthropic"];
@@ -22,7 +23,8 @@ export function resolveVisionConfig(env: NodeJS.ProcessEnv): VisionConfig {
         : env.GEMINI_API_KEY || env.GOOGLE_API_KEY;
   const apiKey = (env.VISION_API_KEY || specificKey || "").trim() || null;
   const model = env.VISION_MODEL?.trim() || DEFAULT_MODELS[providerId];
-  return { providerId, apiKey, model };
+  const fallbackModels = providerId === "gemini" ? geminiFallbackModels(model, env.VISION_FALLBACK_MODELS) : [];
+  return { providerId, apiKey, model, fallbackModels };
 }
 
 export function createProvider(config: VisionConfig, fetchImpl?: FetchLike): VisionProvider | null {
@@ -33,5 +35,10 @@ export function createProvider(config: VisionConfig, fetchImpl?: FetchLike): Vis
   if (config.providerId === "openai") {
     return createOpenAIProvider({ apiKey: config.apiKey, model: config.model, fetchImpl });
   }
-  return createGeminiProvider({ apiKey: config.apiKey, model: config.model, fetchImpl });
+  return createGeminiProvider({
+    apiKey: config.apiKey,
+    model: config.model,
+    fallbackModels: config.fallbackModels,
+    fetchImpl,
+  });
 }
