@@ -50,7 +50,7 @@ export async function analyzeImage(
     response = await fetch(endpoint(baseUrl, "/api/analyze"), {
       method: "POST",
       headers: authHeaders(appSecret, accessToken, true),
-      body: JSON.stringify(image),
+      body: JSON.stringify({ imageBase64: image.imageBase64, mimeType: image.mimeType }),
     });
   } catch {
     throw new AnalyzeError(

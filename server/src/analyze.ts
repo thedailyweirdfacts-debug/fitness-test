@@ -3,12 +3,10 @@ import { AnalysisError, finalizeAnalysis, type MealAnalysis } from "../../shared
 import { HttpError, ProviderError } from "./errors.js";
 import type { VisionProvider } from "./providers/types.js";
 
-const requestSchema = z
-  .object({
-    imageBase64: z.string().min(32).max(3_500_000),
-    mimeType: z.string().min(1).max(40),
-  })
-  .strict();
+const requestSchema = z.object({
+  imageBase64: z.string().min(32).max(3_500_000),
+  mimeType: z.string().min(1).max(40),
+});
 
 export const PHOTO_TOO_LARGE_MESSAGE =
   "That photo is too large to upload. Take it again so the app can shrink it, or choose a smaller picture.";

@@ -133,6 +133,29 @@ describe("POST /api/analyze", () => {
     expect(blocked.headers.get("retry-after")).toBeTruthy();
   });
 
+  it("accepts a photo body that also includes a uri", async () => {
+    let seen: { imageBase64: string; mimeType: string } | null = null;
+    const provider: VisionProvider = {
+      id: "gemini",
+      model: "gemini-3.8-flash",
+      async analyze(image) {
+        seen = image;
+        return apple;
+      },
+    };
+    const base = await start(provider);
+    const response = await post(
+      base,
+      JSON.stringify({
+        uri: "file:///data/user/0/com.plateful.app/cache/plate.jpg",
+        imageBase64: "a".repeat(40),
+        mimeType: "image/jpeg",
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(seen).toEqual({ imageBase64: "a".repeat(40), mimeType: "image/jpeg" });
+  });
+
   it("returns validated items with totals computed on the server", async () => {
     const base = await start(providerReturning(apple));
     const response = await post(
