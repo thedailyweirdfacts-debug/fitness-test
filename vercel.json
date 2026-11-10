@@ -6,6 +6,9 @@
     },
     "api/health.ts": {
       "maxDuration": 10
+    },
+    "api/quota.ts": {
+      "maxDuration": 10
     }
   }
 }

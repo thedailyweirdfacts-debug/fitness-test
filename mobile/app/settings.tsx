@@ -13,7 +13,7 @@ import { colors, displayFont } from "../src/theme";
 export default function SettingsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { settings, saveSettings } = useApp();
+  const { settings, saveSettings, session, signOut, syncError } = useApp();
   const [useDemoMode, setUseDemoMode] = useState(settings.useDemoMode);
   const [apiBaseUrl, setApiBaseUrl] = useState(settings.apiBaseUrl);
   const [appSecret, setAppSecret] = useState(settings.appSecret);
@@ -96,8 +96,30 @@ export default function SettingsScreen() {
       </Pressable>
       <Text style={styles.title}>Settings</Text>
       <Text style={styles.lead}>
-        The Gemini key stays on the server. This app only knows the server address and a shared password, so a stranger cannot spend your free quota.
+        The Gemini key stays on the server. Sign in so your meals stay with you. An optional shared password can add one more lock on the server.
       </Text>
+
+      <View style={styles.card}>
+        <Text style={styles.rowTitle}>Account</Text>
+        {session ? (
+          <>
+            <Text style={styles.rowCopy}>Signed in as {session.email}. Your log, goals, streaks, and badges sync with this account.</Text>
+            {syncError ? <Text style={styles.rowCopy}>{syncError}</Text> : null}
+            <Pressable accessibilityRole="button" accessibilityLabel="Log out" onPress={() => void signOut()} style={styles.link}>
+              <Text style={styles.linkText}>Log out</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Text style={styles.rowCopy}>
+              Create an account to keep meals after a reinstall. Demo mode still works without one, and it stays on this phone.
+            </Text>
+            <Pressable accessibilityRole="button" accessibilityLabel="Sign in" onPress={() => router.push("/auth")} style={styles.link}>
+              <Text style={styles.linkText}>Sign in or create an account</Text>
+            </Pressable>
+          </>
+        )}
+      </View>
 
       <View style={styles.card}>
         <Text style={styles.rowTitle}>Daily calorie goal</Text>

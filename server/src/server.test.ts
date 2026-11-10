@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import type { Server } from "node:http";
+import { createMemoryQuota, type QuotaStore } from "./accounts";
+import { ProviderError } from "./errors";
 import { createRateLimiter } from "./rate-limit";
 import { createServer } from "./server";
 import type { VisionProvider } from "./providers/types";
@@ -41,24 +43,38 @@ describe("POST /api/analyze", () => {
 
   async function start(
     provider: VisionProvider | null,
-    extra?: { bodyLimit?: number; appSecret?: string | null; perMinute?: number },
+    extra?: {
+      bodyLimit?: number;
+      appSecret?: string | null;
+      perMinute?: number;
+      dailyCap?: number;
+      accounts?: boolean;
+      quota?: QuotaStore;
+    },
   ) {
+    const accounts = extra?.accounts !== false;
     const server = createServer({
       provider,
       providerId: "gemini",
       model: "gemini-3.8-flash",
       appSecret: extra && "appSecret" in extra ? extra.appSecret : SECRET,
       bodyLimit: extra?.bodyLimit,
-      rateLimiter: createRateLimiter({ perMinute: extra?.perMinute ?? 5, perDay: 20 }),
+      dailyCap: extra?.dailyCap ?? 10,
+      rateLimiter: createRateLimiter({ perMinute: extra?.perMinute ?? 5, perDay: 60 }),
+      verifyUser: accounts
+        ? async (token) => (token === "user-a" || token === "user-b" ? { userId: token } : null)
+        : undefined,
+      quota: accounts ? (extra?.quota ?? createMemoryQuota()) : undefined,
     });
     servers.push(server);
     const port = await listen(server);
     return `http://127.0.0.1:${port}`;
   }
 
-  function post(base: string, body: string, secret: string | null = SECRET) {
+  function post(base: string, body: string, secret: string | null = SECRET, token: string | null = "user-a") {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (secret) headers["x-plateful-secret"] = secret;
+    if (token) headers.Authorization = `Bearer ${token}`;
     return fetch(`${base}/api/analyze`, { method: "POST", headers, body });
   }
 
@@ -72,6 +88,7 @@ describe("POST /api/analyze", () => {
       model: "gemini-3.8-flash",
       configured: false,
       protected: true,
+      accounts: true,
     });
     expect(JSON.stringify(body)).not.toMatch(/sk-|api[_-]?key|test-secret/i);
 
@@ -80,7 +97,7 @@ describe("POST /api/analyze", () => {
     expect(await missing.json()).toMatchObject({ error: "not_configured" });
   });
 
-  it("refuses an estimate when the secret is missing or wrong, and does not call the model", async () => {
+  it("accepts a signed-in person, and refuses a bad secret, a missing token, or a server with no accounts", async () => {
     let calls = 0;
     const provider: VisionProvider = {
       id: "gemini",
@@ -91,14 +108,19 @@ describe("POST /api/analyze", () => {
       },
     };
     const open = await start(provider, { appSecret: null });
-    const closed = await post(open, JSON.stringify({ imageBase64: "a".repeat(40), mimeType: "image/jpeg" }), null);
-    expect(closed.status).toBe(503);
-    expect(await closed.json()).toMatchObject({ error: "secret_not_configured" });
+    const signedIn = await post(open, JSON.stringify({ imageBase64: "a".repeat(40), mimeType: "image/jpeg" }), null);
+    expect(signedIn.status).toBe(200);
 
     const locked = await start(provider);
     const wrong = await post(locked, JSON.stringify({ imageBase64: "a".repeat(40), mimeType: "image/jpeg" }), "nope");
     expect(wrong.status).toBe(401);
-    expect(calls).toBe(0);
+    const stranger = await post(locked, JSON.stringify({ imageBase64: "a".repeat(40), mimeType: "image/jpeg" }), SECRET, null);
+    expect(stranger.status).toBe(401);
+    const unsigned = await start(provider, { accounts: false });
+    const refused = await post(unsigned, JSON.stringify({ imageBase64: "a".repeat(40), mimeType: "image/jpeg" }));
+    expect(refused.status).toBe(503);
+    expect(await refused.json()).toMatchObject({ error: "accounts_not_configured" });
+    expect(calls).toBe(1);
   });
 
   it("stops a burst of scans", async () => {
@@ -153,5 +175,29 @@ describe("POST /api/analyze", () => {
     const response = await post(base, JSON.stringify({ imageBase64: "a".repeat(40), mimeType: "image/png" }));
     expect(response.status).toBe(502);
     expect(await response.json()).toMatchObject({ error: "invalid_estimate" });
+  });
+
+  it("gives each person their own daily scans and refunds a failed estimate", async () => {
+    let calls = 0;
+    const provider: VisionProvider = {
+      id: "gemini",
+      model: "gemini-3.8-flash",
+      async analyze() {
+        calls += 1;
+        if (calls === 1) throw new ProviderError("model down");
+        return apple;
+      },
+    };
+    const base = await start(provider, { dailyCap: 1 });
+    const body = JSON.stringify({ imageBase64: "a".repeat(40), mimeType: "image/jpeg" });
+    expect((await post(base, body)).status).toBe(502);
+    const retry = await post(base, body);
+    expect(retry.status).toBe(200);
+    expect(retry.headers.get("x-scans-remaining")).toBe("0");
+    expect((await post(base, body)).status).toBe(429);
+    expect((await post(base, body, SECRET, "user-b")).status).toBe(200);
+
+    const quota = await fetch(`${base}/api/quota`, { headers: { Authorization: "Bearer user-a", "x-plateful-secret": SECRET } });
+    expect(await quota.json()).toEqual({ used: 1, remaining: 0, limit: 1 });
   });
 });

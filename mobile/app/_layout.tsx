@@ -38,6 +38,7 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="results" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="auth" />
       </Stack>
       <RewardHost />
     </View>

@@ -1,4 +1,6 @@
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { quotaDayKey } from "../../shared/src/account";
+import { bearerToken, type QuotaStore, type VerifiedUser } from "./accounts";
 import { analyzeRequest } from "./analyze";
 import { HttpError } from "./errors";
 import { createRateLimiter, type RateLimiter } from "./rate-limit";
@@ -10,7 +12,8 @@ export const DEFAULT_BODY_LIMIT = 4_000_000;
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": `Content-Type, ${SECRET_HEADER}`,
+  "Access-Control-Allow-Headers": `Content-Type, Authorization, ${SECRET_HEADER}`,
+  "Access-Control-Expose-Headers": "x-scans-remaining",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -21,6 +24,9 @@ export type ServerOptions = {
   appSecret?: string | null;
   bodyLimit?: number;
   rateLimiter?: RateLimiter;
+  verifyUser?: (token: string) => Promise<VerifiedUser | null>;
+  quota?: QuotaStore;
+  dailyCap?: number;
 };
 
 export type RequestOutcome = {
@@ -81,29 +87,29 @@ export async function handleRequest(
         model: options.model,
         configured: options.provider !== null,
         protected: Boolean(options.appSecret),
+        accounts: Boolean(options.verifyUser && options.quota),
       },
     };
   }
 
-  if (input.pathname !== "/api/analyze") {
+  if (input.pathname !== "/api/analyze" && input.pathname !== "/api/quota") {
     throw new HttpError(404, "not_found", "Nothing is mounted at that path.");
   }
-  if (input.method !== "POST") {
+  if (input.pathname === "/api/analyze" && input.method !== "POST") {
     throw new HttpError(405, "method_not_allowed", "Use POST to estimate a meal.");
   }
-
-  const body = await input.readBody();
-  const secret = options.appSecret?.trim() ?? "";
-  if (!secret) {
-    throw new HttpError(
-      503,
-      "secret_not_configured",
-      "Set APP_SECRET on the server before it will estimate meals.",
-    );
+  if (input.pathname === "/api/quota" && input.method !== "GET") {
+    throw new HttpError(405, "method_not_allowed", "Use GET to read today's scans.");
   }
-  const provided = input.header(SECRET_HEADER) ?? "";
-  if (!secretMatches(provided, secret)) {
-    throw new HttpError(401, "unauthorized", "The app secret did not match. Check Settings and the server's APP_SECRET.");
+
+  const body = input.pathname === "/api/analyze" ? await input.readBody() : null;
+  const user = await requireUser(options, input.header);
+  const day = quotaDayKey(new Date());
+  const cap = options.dailyCap ?? 10;
+
+  if (input.pathname === "/api/quota") {
+    const status = await options.quota!.status(user.userId, day, cap);
+    return { status: 200, body: status };
   }
 
   const decision = rateLimiter(input.ip || "unknown");
@@ -118,8 +124,53 @@ export async function handleRequest(
     };
   }
 
-  const analysis = await analyzeRequest(body, options.provider);
-  return { status: 200, body: analysis };
+  let remaining: number;
+  try {
+    remaining = await options.quota!.consume(user.userId, day, cap);
+  } catch {
+    throw new HttpError(503, "quota_unavailable", "The scan counter could not be reached. Try again in a moment.");
+  }
+  if (remaining < 0) {
+    return {
+      status: 429,
+      headers: { "x-scans-remaining": "0" },
+      body: {
+        error: "scan_cap",
+        message: "No free scans left today. They reset overnight, Pacific time. Demo mode still works.",
+      },
+    };
+  }
+
+  try {
+    const analysis = await analyzeRequest(body, options.provider);
+    return {
+      status: 200,
+      body: analysis,
+      headers: { "x-scans-remaining": String(remaining) },
+    };
+  } catch (error) {
+    await options.quota!.release(user.userId, day).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function requireUser(
+  options: ServerOptions,
+  header: (name: string) => string | undefined,
+): Promise<VerifiedUser> {
+  if (!options.verifyUser || !options.quota) {
+    throw new HttpError(503, "accounts_not_configured", "Set the Supabase URL and keys on the server before it will estimate meals.");
+  }
+  const token = bearerToken(header("authorization"));
+  const user = token ? await options.verifyUser(token) : null;
+  if (!user) {
+    throw new HttpError(401, "unauthorized", "Sign in again, then retry the photo.");
+  }
+  const secret = options.appSecret?.trim() ?? "";
+  if (secret && !secretMatches(header(SECRET_HEADER) ?? "", secret)) {
+    throw new HttpError(401, "unauthorized", "The app secret did not match. Check Settings and the server's APP_SECRET.");
+  }
+  return user;
 }
 
 export function clientIp(req: IncomingMessage): string {

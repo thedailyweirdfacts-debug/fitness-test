@@ -46,6 +46,9 @@ export {
 } from "./goals";
 export type { Badge, DayGoalStatus, FreshRewards, GoalTargets, RewardReport, SeenRewards } from "./goals";
 
+export { DEFAULT_SCAN_CAP, migrationPlan, parseAuthCallback, quotaDayKey } from "./account";
+export type { AuthCallback } from "./account";
+
 export {
   MAX_SCALE,
   MIN_SCALE,
