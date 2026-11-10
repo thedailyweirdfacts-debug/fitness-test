@@ -1,5 +1,5 @@
-/** Two people sharing the free Gemini Flash quota of about 20 scans a day. */
-export const DEFAULT_SCAN_CAP = 10;
+/** Per person, per Pacific day. Flash-Lite is tried first, which leaves more free headroom than the old ~20/day Flash cap. */
+export const DEFAULT_SCAN_CAP = 30;
 
 const PACIFIC = "America/Los_Angeles";
 

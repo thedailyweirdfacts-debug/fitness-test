@@ -15,11 +15,11 @@ const apple = {
 
 describe("vision config", () => {
   it("picks a provider and never requires the key to live in the app", () => {
-    expect(resolveVisionConfig({})).toMatchObject({ providerId: "gemini", apiKey: null, model: "gemini-3.8-flash" });
+    expect(resolveVisionConfig({})).toMatchObject({ providerId: "gemini", apiKey: null, model: "gemini-3.5-flash-lite" });
     expect(resolveVisionConfig({ GEMINI_API_KEY: "AIza-free" })).toMatchObject({
       providerId: "gemini",
       apiKey: "AIza-free",
-      model: "gemini-3.8-flash",
+      model: "gemini-3.5-flash-lite",
     });
     expect(resolveVisionConfig({ GOOGLE_API_KEY: "google-key" }).apiKey).toBe("google-key");
     expect(resolveVisionConfig({ VISION_PROVIDER: "anthropic", VISION_API_KEY: "sk-ant" })).toMatchObject({
@@ -36,10 +36,16 @@ describe("vision config", () => {
     expect(
       resolveVisionConfig({ VISION_PROVIDER: "gemini", VISION_MODEL: "gemini-3.5-flash-lite", GEMINI_API_KEY: "g" }).model,
     ).toBe("gemini-3.5-flash-lite");
-    expect(resolveVisionConfig({}).fallbackModels).toEqual(["gemini-3.6-flash", "gemini-3.5-flash-lite"]);
-    expect(resolveVisionConfig({ VISION_MODEL: "gemini-3.6-flash" }).fallbackModels).toEqual(["gemini-3.5-flash-lite"]);
+    expect(resolveVisionConfig({}).fallbackModels).toEqual(["gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.6-flash"]);
+    expect(resolveVisionConfig({ VISION_MODEL: "gemini-3.8-flash" }).fallbackModels).toEqual([
+      "gemini-3.1-flash-lite",
+      "gemini-3.6-flash",
+    ]);
     expect(
-      resolveVisionConfig({ VISION_FALLBACK_MODELS: "gemini-3.1-flash-lite, gemini-3.5-flash-lite" }).fallbackModels,
+      resolveVisionConfig({
+        VISION_MODEL: "gemini-3.8-flash",
+        VISION_FALLBACK_MODELS: "gemini-3.1-flash-lite, gemini-3.5-flash-lite",
+      }).fallbackModels,
     ).toEqual(["gemini-3.1-flash-lite", "gemini-3.5-flash-lite"]);
     expect(resolveVisionConfig({ VISION_FALLBACK_MODELS: "" }).fallbackModels).toEqual([]);
     expect(resolveVisionConfig({ VISION_PROVIDER: "openai", OPENAI_API_KEY: "sk" }).fallbackModels).toEqual([]);

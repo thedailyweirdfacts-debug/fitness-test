@@ -28,7 +28,7 @@ If you already installed an older Plateful APK, do the steps again from the buil
 2. Create an API key. Stay on the **free** tier. Do not add a billing account or a card.
 3. Copy the key. You will paste it into Vercel in step 5. Do not put it in the app, and do not send it to your friend.
 
-On the free tier, Google may use prompts (including photos) to improve its products. That is the trade for the free quota. The free Flash model is about **20 photos a day for the whole Google project**, shared by both of you. The app gives each signed-in person **10 scans a day** so two people fit. The count is on the Scan screen. It resets at midnight Pacific time. Demo mode does not use a scan. A barcode lookup does not use a scan either. Creating a recipe uses one scan for the whole batch, however many ingredient photos you add. Logging a saved serving uses none. A photo of a can, bag, or bar still does, and the server reads a Nutrition Facts label when it is visible, or the brand's published values for that package.
+On the free tier, Google may use prompts (including photos) to improve its products. That is the trade for the free quota. Flash-Lite is used first, which has more free headroom than the old Flash cap of about 20 photos a day for the whole Google project. The app gives each signed-in person **30 scans a day**. The count is on the Scan screen. It resets at midnight Pacific time. Demo mode does not use a scan. A barcode lookup does not use a scan either. Creating a recipe uses one scan for the whole batch, however many ingredient photos you add. Logging a saved serving uses none. A photo of a can, bag, or bar still does, and the server reads a Nutrition Facts label when it is visible, or the brand's published values for that package.
 
 ### 3. Create the free Supabase project and run the SQL
 
@@ -67,10 +67,10 @@ Write it down. If you skip this, leave `APP_SECRET` unset everywhere. If you set
    | `SUPABASE_ANON_KEY` | the publishable or anon key from step 3 |
    | `SUPABASE_SERVICE_ROLE_KEY` | the secret or service_role key from step 3 |
    | `APP_SECRET` | only if you made one in step 4. Otherwise skip this row |
-   | `SCAN_DAILY_CAP` | `10` (optional; 10 is already the default) |
+   | `SCAN_DAILY_CAP` | `30` (optional; 30 is already the default) |
 
 4. **Deployments → Redeploy** the latest deployment so those variables are used.
-5. Copy the site address. It looks like `https://something.vercel.app`. Open `https://something.vercel.app/api/health` in a browser. You should see `"provider":"gemini"`, `"model":"gemini-3.8-flash"`, `"configured":true`, and `"accounts":true`. The page must not show the Gemini key, the app secret, or either Supabase key.
+5. Copy the site address. It looks like `https://something.vercel.app`. Open `https://something.vercel.app/api/health` in a browser. You should see `"provider":"gemini"`, `"model":"gemini-3.5-flash-lite"`, `"configured":true`, and `"accounts":true`. The page must not show the Gemini key, the app secret, or either Supabase key.
 
 ### 6. Put the app settings on Expo
 
@@ -130,7 +130,7 @@ The gear screen can still turn demo mode on. Demo mode does not need an account,
 
 1. Send your friend the **same build link** from step 8 (the Expo page that downloads the APK). They install it the same way: Chrome, allow unknown apps, Install.
 2. They open Plateful and create **their own** account with their own email. They never need your password, the Gemini key, or the Supabase secret key.
-3. Their meals, history, goals, streaks, and badges are separate from yours. Each of you gets 10 scans a day. A scan on your phone does not use one of theirs.
+3. Their meals, history, goals, streaks, and badges are separate from yours. Each of you gets 30 scans a day. A scan on your phone does not use one of theirs.
 
 Forgot a password: on the sign-in screen tap **Forgot password**, then open the email **on the phone that has Plateful** and choose a new password.
 
@@ -138,9 +138,9 @@ Forgot a password: on the sign-in screen tap **Forgot password**, then open the 
 
 These are the limits that matter. They change, and going over them pauses the feature. It does not charge you, as long as you never add a card.
 
-**Gemini 3.8 Flash (free, checked November 2026).** About **5 requests a minute** and **20 requests a day** per Google project, plus a token cap. The day resets at midnight Pacific time. A second API key in the same project does not add more. Google's own page says the exact numbers can vary: look at the rate limits inside [Google AI Studio](https://aistudio.google.com/). If 20 photos a day is too few, set `VISION_MODEL` to `gemini-3.5-flash-lite` (about 500 a day on the free tier) and raise `RATE_LIMIT_PER_DAY` to match. Do not turn on billing. When 3.8 Flash answers that it is busy, the server retries it once and then tries `gemini-3.6-flash`, then `gemini-3.5-flash-lite`. Change that list with `VISION_FALLBACK_MODELS`. The scan is counted only if some model returns a meal.
+**Gemini Flash-Lite (free, checked November 2026).** The server tries `gemini-3.5-flash-lite` first. Flash-Lite has more free requests per day than Gemini 3.8 Flash, whose free tier was about **20 requests a day** for the whole Google project. The day resets at midnight Pacific time. A second API key in the same project does not add more. Google's own page says the exact numbers can vary: look at the rate limits inside [Google AI Studio](https://aistudio.google.com/). Do not turn on billing. When the primary model is busy, the server retries it once and then tries `gemini-3.1-flash-lite`, then `gemini-3.8-flash`, then `gemini-3.6-flash`. Change that list with `VISION_FALLBACK_MODELS`. The scan is counted only if some model returns a meal.
 
-**This server.** Each signed-in person gets **10 scans a day** (`SCAN_DAILY_CAP`), counted in Supabase so it holds on Vercel. A failed estimate is refunded. There is also a burst brake of 5 scans a minute per address (`RATE_LIMIT_PER_MINUTE`). Photos are kept under Vercel's **4.5 MB** request limit. The app already shrinks each photo to a 1024px JPEG before sending it.
+**This server.** Each signed-in person gets **30 scans a day** (`SCAN_DAILY_CAP`), counted in Supabase so it holds on Vercel. A failed estimate is refunded. There is also a burst brake of 5 scans a minute per address (`RATE_LIMIT_PER_MINUTE`). Photos are kept under Vercel's **4.5 MB** request limit. The app already shrinks each photo to a 1024px JPEG before sending it.
 
 **Supabase Free.** No card. Two active projects, 500 MB of database, 1 GB of file storage, 50 MB per file, and about 50,000 monthly active sign-ins. A project with no traffic for a week pauses. Restore it from the dashboard for free. There are no daily backups on the free plan.
 
@@ -187,7 +187,7 @@ You can also open the same app in a desktop browser with `npm run web`.
 
    Set `VISION_API_KEY` to the Gemini key. Also set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` from the Supabase API settings. `APP_SECRET` is optional. `VISION_PROVIDER` defaults to `gemini`.
 
-   To use another company instead, set `VISION_PROVIDER` to `openai` or `anthropic` and supply that company's key (`OPENAI_API_KEY` or `ANTHROPIC_API_KEY` also work). Optional `VISION_MODEL` overrides the default (`gemini-3.8-flash`, `gpt-5.4-mini`, or `claude-haiku-5-5`).
+   To use another company instead, set `VISION_PROVIDER` to `openai` or `anthropic` and supply that company's key (`OPENAI_API_KEY` or `ANTHROPIC_API_KEY` also work). Optional `VISION_MODEL` overrides the default (`gemini-3.5-flash-lite`, `gpt-5.4-mini`, or `claude-haiku-5-5`).
 
 2. Start it:
 
