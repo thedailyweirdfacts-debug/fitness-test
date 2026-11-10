@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, dayKeyFromDate } from "./dates";
+import { addDays, dayKeyFromDate } from "./dates.js";
 import {
   buildRewardReport,
   calorieGoalHit,
@@ -9,9 +9,9 @@ import {
   parseGoalInput,
   progressCopy,
   streakStats,
-} from "./goals";
-import { mealTypeForTime } from "./meal-type";
-import type { FoodItem, LoggedMeal, MealType } from "./schema";
+} from "./goals.js";
+import { mealTypeForTime } from "./meal-type.js";
+import type { FoodItem, LoggedMeal, MealType } from "./schema.js";
 
 const TARGETS = { calorieGoal: 2000, proteinGoal: null, windowPercent: 10 };
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { mealAnalysisSchema } from "./schema";
-import { sumMacros } from "./nutrition";
-import { FRIES_MEAL, SAUSAGE_MEAL, getSample, mockSampleForSeed } from "./mocks";
+import { mealAnalysisSchema } from "./schema.js";
+import { sumMacros } from "./nutrition.js";
+import { FRIES_MEAL, SAUSAGE_MEAL, getSample, mockSampleForSeed } from "./mocks.js";
 
 describe("owner sample meals", () => {
   it("matches the sausage plate estimate and leaves out the other burger", () => {

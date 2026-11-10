@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { AnalysisError, finalizeAnalysis, type MealAnalysis } from "../../shared/src/index";
-import { HttpError, ProviderError } from "./errors";
-import type { VisionProvider } from "./providers/types";
+import { AnalysisError, finalizeAnalysis, type MealAnalysis } from "../../shared/src/index.js";
+import { HttpError, ProviderError } from "./errors.js";
+import type { VisionProvider } from "./providers/types.js";
 
 const requestSchema = z
   .object({

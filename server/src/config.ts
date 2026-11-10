@@ -1,7 +1,7 @@
-import { createAnthropicProvider } from "./providers/anthropic";
-import { createGeminiProvider } from "./providers/gemini";
-import { createOpenAIProvider } from "./providers/openai";
-import { DEFAULT_MODELS, type FetchLike, type ProviderId, type VisionProvider } from "./providers/types";
+import { createAnthropicProvider } from "./providers/anthropic.js";
+import { createGeminiProvider } from "./providers/gemini.js";
+import { createOpenAIProvider } from "./providers/openai.js";
+import { DEFAULT_MODELS, type FetchLike, type ProviderId, type VisionProvider } from "./providers/types.js";
 
 export type VisionConfig = {
   providerId: ProviderId;

@@ -1,11 +1,11 @@
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { quotaDayKey } from "../../shared/src/account";
-import { bearerToken, type QuotaStore, type VerifiedUser } from "./accounts";
-import { analyzeRequest } from "./analyze";
-import { HttpError } from "./errors";
-import { createRateLimiter, type RateLimiter } from "./rate-limit";
-import { SECRET_HEADER, secretMatches } from "./secret";
-import type { ProviderId, VisionProvider } from "./providers/types";
+import { quotaDayKey } from "../../shared/src/account.js";
+import { bearerToken, type QuotaStore, type VerifiedUser } from "./accounts.js";
+import { analyzeRequest } from "./analyze.js";
+import { HttpError } from "./errors.js";
+import { createRateLimiter, type RateLimiter } from "./rate-limit.js";
+import { SECRET_HEADER, secretMatches } from "./secret.js";
+import type { ProviderId, VisionProvider } from "./providers/types.js";
 
 export const DEFAULT_BODY_LIMIT = 4_000_000;
 

@@ -1,6 +1,6 @@
-import { loadEnvFile } from "./env";
-import { runtimeOptions } from "./runtime";
-import { createServer } from "./server";
+import { loadEnvFile } from "./env.js";
+import { runtimeOptions } from "./runtime.js";
+import { createServer } from "./server.js";
 
 loadEnvFile();
 

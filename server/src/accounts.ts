@@ -1,4 +1,4 @@
-import { DEFAULT_SCAN_CAP } from "../../shared/src/account";
+import { DEFAULT_SCAN_CAP } from "../../shared/src/account.js";
 
 export type VerifiedUser = { userId: string };
 

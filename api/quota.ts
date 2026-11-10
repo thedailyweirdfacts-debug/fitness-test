@@ -1,3 +1,3 @@
-export { default } from "./analyze";
+export { default } from "./analyze.js";
 
 export const maxDuration = 10;

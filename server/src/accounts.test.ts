@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createMemoryQuota, createSupabaseQuota, verifySupabaseUser } from "./accounts";
+import { createMemoryQuota, createSupabaseQuota, verifySupabaseUser } from "./accounts.js";
 
 describe("supabase accounts", () => {
   it("accepts the auth user id and rejects anything else", async () => {

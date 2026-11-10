@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { groupMealsByType, mealTypeForTime, mealTypeFromUnknown, needsMealTypeMigration } from "./meal-type";
-import type { LoggedMeal } from "./schema";
+import { groupMealsByType, mealTypeForTime, mealTypeFromUnknown, needsMealTypeMigration } from "./meal-type.js";
+import type { LoggedMeal } from "./schema.js";
 
 describe("meal types", () => {
   it("picks a type from the time of day", () => {

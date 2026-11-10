@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { migrationPlan, parseAuthCallback, quotaDayKey } from "./account";
+import { migrationPlan, parseAuthCallback, quotaDayKey } from "./account.js";
 
 describe("account sync", () => {
   it("uses the Pacific day, matching the Gemini free-tier reset", () => {

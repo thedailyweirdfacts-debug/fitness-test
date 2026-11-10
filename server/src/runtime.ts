@@ -1,7 +1,7 @@
-import { createProvider, resolveVisionConfig } from "./config";
-import { createSupabaseQuota, scanCap, verifySupabaseUser } from "./accounts";
-import { createRateLimiter, readLimit, type RateLimiter } from "./rate-limit";
-import type { ServerOptions } from "./server";
+import { createProvider, resolveVisionConfig } from "./config.js";
+import { createSupabaseQuota, scanCap, verifySupabaseUser } from "./accounts.js";
+import { createRateLimiter, readLimit, type RateLimiter } from "./rate-limit.js";
+import type { ServerOptions } from "./server.js";
 
 let limiter: RateLimiter | null = null;
 

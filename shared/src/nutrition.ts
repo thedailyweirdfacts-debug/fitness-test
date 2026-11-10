@@ -1,4 +1,4 @@
-import { mealTypeFromUnknown } from "./meal-type";
+import { mealTypeFromUnknown } from "./meal-type.js";
 import {
   AnalysisError,
   type AnalysisItem,
@@ -9,7 +9,7 @@ import {
   loggedMealSchema,
   mealAnalysisSchema,
   modelOutputSchema,
-} from "./schema";
+} from "./schema.js";
 
 export const MIN_SCALE = 0.25;
 export const MAX_SCALE = 8;

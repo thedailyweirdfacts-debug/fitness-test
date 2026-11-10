@@ -1,7 +1,7 @@
-import { HttpError } from "../server/src/errors";
-import { createRateLimiter } from "../server/src/rate-limit";
-import { runtimeOptions } from "../server/src/runtime";
-import { DEFAULT_BODY_LIMIT, handleRequest } from "../server/src/server";
+import { HttpError } from "../server/src/errors.js";
+import { createRateLimiter } from "../server/src/rate-limit.js";
+import { runtimeOptions } from "../server/src/runtime.js";
+import { DEFAULT_BODY_LIMIT, handleRequest } from "../server/src/server.js";
 
 export const maxDuration = 60;
 
