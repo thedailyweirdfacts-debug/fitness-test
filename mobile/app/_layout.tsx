@@ -37,6 +37,7 @@ function RootNavigator() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="results" />
+        <Stack.Screen name="recipe" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="auth" />
       </Stack>

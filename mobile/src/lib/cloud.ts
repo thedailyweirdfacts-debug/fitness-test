@@ -1,6 +1,6 @@
 import { File } from "expo-file-system";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { loggedMealSchema, type LoggedMeal } from "../../../shared/src";
+import { loggedMealSchema, recipeSchema, type LoggedMeal, type Recipe } from "../../../shared/src";
 
 const BUCKET = "meal-photos";
 const SIGNED_SECONDS = 60 * 60 * 12;
@@ -142,6 +142,92 @@ async function fetchPreferences(supabase: SupabaseClient): Promise<CloudPreferen
 async function signedPhotoUrl(supabase: SupabaseClient, path: string): Promise<string | null> {
   const signed = await supabase.storage.from(BUCKET).createSignedUrl(path, SIGNED_SECONDS);
   return signed.data?.signedUrl ?? null;
+}
+
+type RecipeRow = {
+  id: string;
+  name: string;
+  servings: number | string;
+  cooked_grams: number | string | null;
+  photo_path: string | null;
+  items: unknown;
+  confidence: string;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export async function fetchCloudRecipes(supabase: SupabaseClient): Promise<{ recipes: Recipe[]; paths: Map<string, string> }> {
+  const { data, error } = await supabase.from("recipes").select("*").order("updated_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  const paths = new Map<string, string>();
+  const recipes: Recipe[] = [];
+  for (const row of (data ?? []) as RecipeRow[]) {
+    if (row.photo_path) paths.set(row.id, row.photo_path);
+    const photoUri = row.photo_path ? await signedPhotoUrl(supabase, row.photo_path) : null;
+    const recipe = recipeFromRow(row, photoUri);
+    if (recipe) recipes.push(recipe);
+  }
+  return { recipes, paths };
+}
+
+export async function upsertCloudRecipe(
+  supabase: SupabaseClient,
+  userId: string,
+  recipe: Recipe,
+  photoBytes: Uint8Array | null,
+  existingPath: string | null,
+): Promise<{ recipe: Recipe; path: string | null }> {
+  let path = existingPath;
+  if (photoBytes) {
+    path = `${userId}/recipes/${recipe.id}.jpg`;
+    const body = photoBytes.buffer.slice(photoBytes.byteOffset, photoBytes.byteOffset + photoBytes.byteLength) as ArrayBuffer;
+    const uploaded = await supabase.storage.from(BUCKET).upload(path, body, { contentType: "image/jpeg", upsert: true });
+    if (uploaded.error) throw new Error(uploaded.error.message);
+  }
+  const saved = await supabase.from("recipes").upsert({
+    id: recipe.id,
+    user_id: userId,
+    name: recipe.name,
+    servings: recipe.servings,
+    cooked_grams: recipe.cookedGrams,
+    photo_path: path,
+    items: recipe.items,
+    confidence: recipe.confidence,
+    notes: recipe.notes,
+    created_at: recipe.createdAt,
+    updated_at: recipe.updatedAt,
+  });
+  if (saved.error) throw new Error(saved.error.message);
+  const photoUri = path ? (await signedPhotoUrl(supabase, path)) ?? recipe.photoUri : recipe.photoUri;
+  return { recipe: { ...recipe, photoUri }, path };
+}
+
+export async function deleteCloudRecipe(supabase: SupabaseClient, recipeId: string, path: string | null): Promise<void> {
+  if (path) {
+    const removed = await supabase.storage.from(BUCKET).remove([path]);
+    if (removed.error) throw new Error(removed.error.message);
+  }
+  const deleted = await supabase.from("recipes").delete().eq("id", recipeId);
+  if (deleted.error) throw new Error(deleted.error.message);
+}
+
+function recipeFromRow(row: RecipeRow, photoUri: string | null): Recipe | null {
+  const servings = typeof row.servings === "string" ? Number(row.servings) : row.servings;
+  const cooked = row.cooked_grams == null ? null : typeof row.cooked_grams === "string" ? Number(row.cooked_grams) : row.cooked_grams;
+  const parsed = recipeSchema.safeParse({
+    id: row.id,
+    name: row.name,
+    servings,
+    cookedGrams: cooked,
+    photoUri,
+    items: row.items,
+    confidence: row.confidence,
+    notes: row.notes ?? "",
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  });
+  return parsed.success ? parsed.data : null;
 }
 
 function mealFromRow(row: MealRow, photoUri: string | null): LoggedMeal | null {

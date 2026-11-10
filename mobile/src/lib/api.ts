@@ -159,6 +159,55 @@ export async function lookupBarcode(
   return { analysis: parsed.data, scansRemaining: scansRemaining(response) };
 }
 
+export type RecipeIngredientInput = {
+  text?: string;
+  imageBase64?: string;
+  mimeType?: string;
+  barcode?: string;
+};
+
+export async function analyzeRecipe(
+  baseUrl: string,
+  body: { ingredients: RecipeIngredientInput[]; dishImageBase64?: string; dishMimeType?: string },
+  appSecret: string,
+  accessToken: string,
+): Promise<ScanResult> {
+  if (!baseUrl.trim()) {
+    throw new AnalyzeError("Add the server address in Settings, or turn demo mode back on.", "network");
+  }
+  if (!accessToken) {
+    throw new AnalyzeError("Sign in again, then estimate the recipe.", "server");
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(endpoint(baseUrl, "/api/analyze-recipe"), {
+      method: "POST",
+      headers: authHeaders(appSecret, accessToken, true),
+      body: JSON.stringify(body),
+    });
+  } catch {
+    throw new AnalyzeError(
+      "Couldn't reach the server. Check the address in Settings, or turn demo mode back on.",
+      "network",
+    );
+  }
+
+  const payload = await readJson(response);
+  if (!response.ok) {
+    const message = payload && typeof payload.message === "string" ? payload.message : "The server couldn't estimate this recipe.";
+    if (response.status === 503) throw new AnalyzeError(message, "not_configured");
+    if (response.status === 422) throw new AnalyzeError(message, "no_food");
+    throw new AnalyzeError(message, "server");
+  }
+
+  const parsed = mealAnalysisSchema.safeParse(payload);
+  if (!parsed.success) {
+    throw new AnalyzeError("The recipe didn't match the expected format.", "bad_response");
+  }
+  return { analysis: parsed.data, scansRemaining: scansRemaining(response) };
+}
+
 export async function fetchQuota(baseUrl: string, accessToken: string, appSecret: string): Promise<QuotaReport> {
   if (!baseUrl.trim() || !accessToken) {
     throw new AnalyzeError("Sign in again, then retry the photo.", "server");

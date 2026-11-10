@@ -4,7 +4,7 @@ Snap a photo of your plate, scan a package barcode, or type what you ate, and ge
 
 The default model is **Google Gemini 3.8 Flash**, on the free Google AI Studio tier. No credit card. OpenAI and Anthropic still work if you set them later.
 
-Demo mode needs no key. It walks through a photo or a typed meal → results → daily log with two real meals. A typed meal has no photo. A barcode lookup needs the server.
+Demo mode needs no key. It walks through a photo or a typed meal → results → daily log with two real meals. A typed meal has no photo. A barcode lookup needs the server. Saved recipes in demo mode stay on the phone.
 
 ## Do this once, in order (Windows, free, no credit card)
 
@@ -28,12 +28,12 @@ If you already installed an older Plateful APK, do the steps again from the buil
 2. Create an API key. Stay on the **free** tier. Do not add a billing account or a card.
 3. Copy the key. You will paste it into Vercel in step 5. Do not put it in the app, and do not send it to your friend.
 
-On the free tier, Google may use prompts (including photos) to improve its products. That is the trade for the free quota. The free Flash model is about **20 photos a day for the whole Google project**, shared by both of you. The app gives each signed-in person **10 scans a day** so two people fit. The count is on the Scan screen. It resets at midnight Pacific time. Demo mode does not use a scan. A barcode lookup does not use a scan either. A photo of a can, bag, or bar still does, and the server reads a Nutrition Facts label when it is visible, or the brand's published values for that package.
+On the free tier, Google may use prompts (including photos) to improve its products. That is the trade for the free quota. The free Flash model is about **20 photos a day for the whole Google project**, shared by both of you. The app gives each signed-in person **10 scans a day** so two people fit. The count is on the Scan screen. It resets at midnight Pacific time. Demo mode does not use a scan. A barcode lookup does not use a scan either. Creating a recipe uses one scan for the whole batch, however many ingredient photos you add. Logging a saved serving uses none. A photo of a can, bag, or bar still does, and the server reads a Nutrition Facts label when it is visible, or the brand's published values for that package.
 
 ### 3. Create the free Supabase project and run the SQL
 
 1. Open [supabase.com/dashboard](https://supabase.com/dashboard) and sign up with GitHub. Create a new project. Pick the **Free** plan. Do not add a card. Wait until the project finishes starting.
-2. Open **SQL Editor → New query**. On your PC, open the file `supabase/migrations/001_accounts.sql` from this repo (after the merge). Select all of it, copy it, paste it into the query box, and press **Run**. You should see success. That creates the tables, the private `meal-photos` bucket, and the rule that each person can only read and write their own rows.
+2. Open **SQL Editor → New query**. On your PC, open the file `supabase/migrations/001_accounts.sql` from this repo (after the merge). Select all of it, copy it, paste it into the query box, and press **Run**. You should see success. That creates the tables, the private `meal-photos` bucket, and the rule that each person can only read and write their own rows. Then do the same with `supabase/migrations/002_recipes.sql`. That adds the private recipes table. If you already ran the first file, run this second file now.
 3. Open **Project Settings → API**. Copy three values and keep them somewhere safe:
    - **Project URL** (looks like `https://abcdefgh.supabase.co`)
    - **Publishable key** or **anon** key (the dashboard may say `sb_publishable_...` or a long `eyJ...` key). This one is allowed in the app.

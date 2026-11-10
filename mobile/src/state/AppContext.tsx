@@ -3,22 +3,29 @@ import type { Session } from "@supabase/supabase-js";
 import * as Linking from "expo-linking";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  bakeRecipeItems,
   createId,
   migrationPlan,
   needsMealTypeMigration,
   parseAuthCallback,
   parseMealLog,
+  parseRecipeList,
+  recipeSchema,
   type LoggedMeal,
   type MealType,
+  type Recipe,
   type SeenRewards,
 } from "../../../shared/src";
 import { fetchQuota } from "../lib/api";
 import {
   deleteCloudMeal,
+  deleteCloudRecipe,
   fetchCloudLog,
+  fetchCloudRecipes,
   readPhotoBytes,
   saveCloudPreferences,
   upsertCloudMeal,
+  upsertCloudRecipe,
   type CloudPreferences,
 } from "../lib/cloud";
 import type { Draft } from "../lib/draft";
@@ -28,6 +35,7 @@ import { getSupabase, supabaseConfigured } from "../lib/supabase";
 
 const SETTINGS_KEY = "@plateful/settings";
 const MEALS_KEY = "@plateful/meals";
+const RECIPES_KEY = "@plateful/recipes";
 const REWARDS_KEY = "@plateful/rewards";
 const EMPTY_SEEN: SeenRewards = { badges: [], goalDays: [] };
 
@@ -50,6 +58,9 @@ type AppContextValue = {
   signOut: () => Promise<void>;
   settings: AppSettings;
   meals: LoggedMeal[];
+  recipes: Recipe[];
+  saveRecipe: (recipe: Recipe) => Promise<void>;
+  deleteRecipe: (id: string) => Promise<void>;
   seenRewards: SeenRewards;
   saveSeenRewards: (next: SeenRewards) => Promise<void>;
   draft: Draft | null;
@@ -97,6 +108,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [meals, setMeals] = useState<LoggedMeal[]>([]);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [session, setSession] = useState<AccountSession | null>(null);
   const [passwordReset, setPasswordReset] = useState(false);
@@ -105,6 +117,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [seenRewards, setSeenRewards] = useState<SeenRewards>(EMPTY_SEEN);
   const mealsRef = useRef<LoggedMeal[]>([]);
   const localMealsRef = useRef<LoggedMeal[]>([]);
+  const recipesRef = useRef<Recipe[]>([]);
+  const localRecipesRef = useRef<Recipe[]>([]);
+  const recipePathsRef = useRef<Map<string, string>>(new Map());
   const settingsRef = useRef<AppSettings>(defaultSettings());
   const seenRef = useRef<SeenRewards>(EMPTY_SEEN);
   const localSeenRef = useRef<SeenRewards>(EMPTY_SEEN);
@@ -116,6 +131,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     mealsRef.current = next;
     if (local) localMealsRef.current = next;
     setMeals(next);
+  }, []);
+
+  const replaceRecipes = useCallback((next: Recipe[], local: boolean) => {
+    recipesRef.current = next;
+    if (local) localRecipesRef.current = next;
+    setRecipes(next);
   }, []);
 
   const refreshQuota = useCallback(async () => {
@@ -180,13 +201,39 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setSeenRewards(seen);
         photoPathsRef.current = paths;
         replaceMeals([...mealsById.values()].sort((a, b) => a.loggedAt.localeCompare(b.loggedAt)), false);
-        setSyncError(null);
+        try {
+          const remoteRecipes = await fetchCloudRecipes(supabase);
+          const recipeMarked = (await AsyncStorage.getItem(`@plateful/recipes-migrated/${account.userId}`)) === "1";
+          const pendingRecipes = migrationPlan(
+            localRecipesRef.current.map((recipe) => recipe.id),
+            remoteRecipes.recipes.map((recipe) => recipe.id),
+            recipeMarked,
+          );
+          const recipesById = new Map(remoteRecipes.recipes.map((recipe) => [recipe.id, recipe]));
+          const recipePaths = new Map(remoteRecipes.paths);
+          for (const id of pendingRecipes) {
+            const recipe = localRecipesRef.current.find((item) => item.id === id);
+            if (!recipe) continue;
+            const bytes = await readPhotoBytes(recipe.photoUri);
+            const saved = await upsertCloudRecipe(supabase, account.userId, recipe, bytes, null);
+            recipesById.set(saved.recipe.id, saved.recipe);
+            if (saved.path) recipePaths.set(saved.recipe.id, saved.path);
+          }
+          if (pendingRecipes.length === 0 || pendingRecipes.every((id) => recipesById.has(id))) {
+            await AsyncStorage.setItem(`@plateful/recipes-migrated/${account.userId}`, "1");
+          }
+          recipePathsRef.current = recipePaths;
+          replaceRecipes([...recipesById.values()], false);
+          setSyncError(null);
+        } catch {
+          setSyncError("Couldn't open your saved recipes. In Supabase, run the recipes SQL, then sign in again.");
+        }
         await refreshQuota();
       } catch {
         setSyncError("Couldn't open your account log. Check the connection and try again.");
       }
     },
-    [refreshQuota, replaceMeals],
+    [refreshQuota, replaceMeals, replaceRecipes],
   );
 
   useEffect(() => {
@@ -201,6 +248,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         seenRef.current = localSeenRef.current;
         setSeenRewards(localSeenRef.current);
         replaceMeals(localMealsRef.current, false);
+        replaceRecipes(localRecipesRef.current, false);
+        recipePathsRef.current = new Map();
         return;
       }
       const account = toAccount(next);
@@ -215,9 +264,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
     (async () => {
       try {
-        const [settingsRaw, mealsRaw, rewardsRaw] = await Promise.all([
+        const [settingsRaw, mealsRaw, recipesRaw, rewardsRaw] = await Promise.all([
           AsyncStorage.getItem(SETTINGS_KEY),
           AsyncStorage.getItem(MEALS_KEY),
+          AsyncStorage.getItem(RECIPES_KEY),
           AsyncStorage.getItem(REWARDS_KEY),
         ]);
         if (cancelled) return;
@@ -235,6 +285,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           mealsRef.current = parsed;
           setMeals(parsed);
           if (needsMealTypeMigration(raw)) await AsyncStorage.setItem(MEALS_KEY, JSON.stringify(parsed));
+        }
+        if (recipesRaw) {
+          const parsed = parseRecipeList(JSON.parse(recipesRaw));
+          localRecipesRef.current = parsed;
+          recipesRef.current = parsed;
+          setRecipes(parsed);
         }
         const seen = readSeen(rewardsRaw);
         localSeenRef.current = seen;
@@ -302,9 +358,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
         seenRef.current = localSeenRef.current;
         setSeenRewards(localSeenRef.current);
         replaceMeals(localMealsRef.current, false);
+        replaceRecipes(localRecipesRef.current, false);
+        recipePathsRef.current = new Map();
       },
       settings,
       meals,
+      recipes,
+      async saveRecipe(recipe) {
+        const photoUri = recipe.photoUri ? await persistMealPhoto(recipe.photoUri, recipe.id) : null;
+        const candidate = { ...recipe, photoUri, items: bakeRecipeItems(recipe.items), updatedAt: new Date().toISOString() };
+        const parsed = recipeSchema.safeParse(candidate);
+        if (!parsed.success) throw new Error("Check the recipe name, servings, and ingredients.");
+        const current = sessionRef.current;
+        const supabase = getSupabase();
+        let stored = parsed.data;
+        if (current && supabase) {
+          const bytes = await readPhotoBytes(photoUri);
+          const saved = await upsertCloudRecipe(supabase, current.userId, stored, bytes, recipePathsRef.current.get(recipe.id) ?? null);
+          stored = saved.recipe;
+          if (saved.path) recipePathsRef.current.set(recipe.id, saved.path);
+        }
+        const next = recipesRef.current.some((item) => item.id === stored.id)
+          ? recipesRef.current.map((item) => (item.id === stored.id ? stored : item))
+          : [...recipesRef.current, stored];
+        if (!current) await AsyncStorage.setItem(RECIPES_KEY, JSON.stringify(next));
+        replaceRecipes(next, !current);
+      },
+      async deleteRecipe(id) {
+        const current = sessionRef.current;
+        const supabase = getSupabase();
+        const target = recipesRef.current.find((recipe) => recipe.id === id);
+        if (current && supabase) {
+          await deleteCloudRecipe(supabase, id, recipePathsRef.current.get(id) ?? null);
+          recipePathsRef.current.delete(id);
+        }
+        const next = recipesRef.current.filter((recipe) => recipe.id !== id);
+        if (!current) await AsyncStorage.setItem(RECIPES_KEY, JSON.stringify(next));
+        replaceRecipes(next, !current);
+        if (target && !current) deleteStoredPhoto(target.photoUri);
+      },
       seenRewards,
       async saveSeenRewards(next) {
         seenRef.current = next;
@@ -408,7 +500,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (target && !current) deleteStoredPhoto(target.photoUri);
       },
     }),
-    [ready, session, passwordReset, scansRemaining, refreshQuota, syncError, settings, meals, seenRewards, draft, replaceMeals],
+    [ready, session, passwordReset, scansRemaining, refreshQuota, syncError, settings, meals, recipes, seenRewards, draft, replaceMeals, replaceRecipes],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

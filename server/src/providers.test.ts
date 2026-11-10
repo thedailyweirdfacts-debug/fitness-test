@@ -233,6 +233,48 @@ describe("gemini provider", () => {
     );
     expect(calls).toBe(1);
   });
+
+  it("sends every recipe photo in one request and falls back when the primary is busy", async () => {
+    const urls: string[] = [];
+    const provider = createGeminiProvider({
+      apiKey: "AIza-test-secret",
+      model: "gemini-3.8-flash",
+      fallbackModels: ["gemini-3.6-flash"],
+      sleep: async () => undefined,
+      fetchImpl: async (url, init) => {
+        urls.push(url);
+        const body = JSON.parse(String(init?.body)) as {
+          systemInstruction?: { parts?: Array<{ text?: string }> };
+          contents?: Array<{ parts?: Array<{ text?: string; inlineData?: { data?: string } }> }>;
+        };
+        const parts = body.contents?.[0]?.parts ?? [];
+        expect(parts.filter((part) => part.inlineData).map((part) => part.inlineData?.data)).toEqual(["rice", "chicken", "dish"]);
+        expect(body.systemInstruction?.parts?.[0]?.text).toContain("whole batch");
+        expect(parts[0]?.text).toContain("2 cups rice");
+        if (urls.length < 3) {
+          return new Response(JSON.stringify({ error: { message: "high demand", status: "UNAVAILABLE" } }), { status: 503 });
+        }
+        return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(apple) }] } }] }), {
+          status: 200,
+        });
+      },
+    });
+    await expect(
+      provider.analyzeRecipe?.({
+        lines: ["2 cups rice"],
+        images: [
+          { imageBase64: "rice", mimeType: "image/jpeg", role: "ingredient" },
+          { imageBase64: "chicken", mimeType: "image/jpeg", role: "ingredient" },
+          { imageBase64: "dish", mimeType: "image/jpeg", role: "dish" },
+        ],
+      }),
+    ).resolves.toEqual(apple);
+    expect(urls.map((url) => url.split("/models/")[1]?.split(":")[0])).toEqual([
+      "gemini-3.8-flash",
+      "gemini-3.8-flash",
+      "gemini-3.6-flash",
+    ]);
+  });
 });
 
 describe("extractJson", () => {
