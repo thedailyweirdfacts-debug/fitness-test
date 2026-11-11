@@ -1,15 +1,18 @@
 import { MEAL_JSON_SCHEMA } from "../json-schema.js";
 import { extractJson } from "../json.js";
 import { ProviderError } from "../errors.js";
-import { SYSTEM_PROMPT, USER_PROMPT } from "../prompt.js";
+import { photoSystemPrompt, USER_PROMPT } from "../prompt.js";
+import { defaultDishScale, type DishScale } from "../scale.js";
 import { providerMessage } from "./openai.js";
 import type { FetchLike, VisionProvider } from "./types.js";
 
 export function createAnthropicProvider(options: {
   apiKey: string;
   model: string;
+  scale?: DishScale;
   fetchImpl?: FetchLike;
 }): VisionProvider {
+  const scale = options.scale ?? defaultDishScale();
   const fetchImpl = options.fetchImpl ?? fetch;
   return {
     id: "anthropic",
@@ -27,7 +30,7 @@ export function createAnthropicProvider(options: {
           body: JSON.stringify({
             model: options.model,
             max_tokens: 4000,
-            system: SYSTEM_PROMPT,
+            system: photoSystemPrompt(image.scale ?? scale),
             tools: [
               {
                 name: "report_meal",

@@ -2,12 +2,14 @@ import { createAnthropicProvider } from "./providers/anthropic.js";
 import { createGeminiProvider, geminiFallbackModels } from "./providers/gemini.js";
 import { createOpenAIProvider } from "./providers/openai.js";
 import { DEFAULT_MODELS, type FetchLike, type ProviderId, type VisionProvider } from "./providers/types.js";
+import { resolveDishScale, type DishScale } from "./scale.js";
 
 export type VisionConfig = {
   providerId: ProviderId;
   apiKey: string | null;
   model: string;
   fallbackModels?: string[];
+  scale?: DishScale;
 };
 
 const PROVIDERS: readonly ProviderId[] = ["gemini", "openai", "anthropic"];
@@ -24,21 +26,22 @@ export function resolveVisionConfig(env: NodeJS.ProcessEnv): VisionConfig {
   const apiKey = (env.VISION_API_KEY || specificKey || "").trim() || null;
   const model = env.VISION_MODEL?.trim() || DEFAULT_MODELS[providerId];
   const fallbackModels = providerId === "gemini" ? geminiFallbackModels(model, env.VISION_FALLBACK_MODELS) : [];
-  return { providerId, apiKey, model, fallbackModels };
+  return { providerId, apiKey, model, fallbackModels, scale: resolveDishScale(env) };
 }
 
 export function createProvider(config: VisionConfig, fetchImpl?: FetchLike): VisionProvider | null {
   if (!config.apiKey) return null;
   if (config.providerId === "anthropic") {
-    return createAnthropicProvider({ apiKey: config.apiKey, model: config.model, fetchImpl });
+    return createAnthropicProvider({ apiKey: config.apiKey, model: config.model, scale: config.scale, fetchImpl });
   }
   if (config.providerId === "openai") {
-    return createOpenAIProvider({ apiKey: config.apiKey, model: config.model, fetchImpl });
+    return createOpenAIProvider({ apiKey: config.apiKey, model: config.model, scale: config.scale, fetchImpl });
   }
   return createGeminiProvider({
     apiKey: config.apiKey,
     model: config.model,
     fallbackModels: config.fallbackModels,
+    scale: config.scale,
     fetchImpl,
   });
 }

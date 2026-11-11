@@ -190,7 +190,11 @@ describe("POST /api/analyze", () => {
       }),
     );
     expect(response.status).toBe(200);
-    expect(seen).toEqual({ imageBase64: "a".repeat(40), mimeType: "image/jpeg" });
+    expect(seen).toEqual({
+      imageBase64: "a".repeat(40),
+      mimeType: "image/jpeg",
+      scale: { plateInches: 9.5, forkInches: 7.5 },
+    });
   });
 
   it("returns validated items with totals computed on the server", async () => {

@@ -3,6 +3,7 @@ import { AnalysisError, finalizeAnalysis, type MealAnalysis } from "../../shared
 import { HttpError, ProviderError } from "./errors.js";
 import { barcodeFromModel, type OffLookup } from "./open-food-facts.js";
 import type { VisionProvider } from "./providers/types.js";
+import { applyScaleOverride, defaultDishScale, type DishScale } from "./scale.js";
 
 const requestSchema = z.object({
   imageBase64: z.string().min(32).max(3_500_000),
@@ -25,6 +26,7 @@ export async function analyzeRequest(
   body: unknown,
   provider: VisionProvider | null,
   lookup?: (barcode: string) => Promise<OffLookup>,
+  scale: DishScale = defaultDishScale(),
 ): Promise<MealAnalysis> {
   if (!provider) {
     throw new HttpError(503, "not_configured", "No vision API key is configured on the server.");
@@ -50,7 +52,15 @@ export async function analyzeRequest(
   }
 
   try {
-    const raw = await provider.analyze({ imageBase64, mimeType });
+    const record = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
+    const raw = await provider.analyze({
+      imageBase64,
+      mimeType,
+      scale: applyScaleOverride(scale, {
+        plateInches: record.scalePlateInches,
+        forkInches: record.scaleForkInches,
+      }),
+    });
     const barcode = barcodeFromModel(raw);
     if (barcode && lookup) {
       try {

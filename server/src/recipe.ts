@@ -11,6 +11,7 @@ import { rethrowEstimate, PHOTO_TOO_LARGE_MESSAGE } from "./analyze.js";
 import { HttpError } from "./errors.js";
 import { normalizeBarcode, type OffLookup } from "./open-food-facts.js";
 import type { RecipeVisionRequest, VisionProvider } from "./providers/types.js";
+import { applyScaleOverride, defaultDishScale, type DishScale } from "./scale.js";
 
 const MAX_IMAGE = 700_000;
 const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"]);
@@ -29,6 +30,8 @@ const requestSchema = z
     ingredients: z.array(ingredientSchema).min(1).max(6),
     dishImageBase64: z.string().max(MAX_IMAGE).optional(),
     dishMimeType: z.string().max(40).optional(),
+    scalePlateInches: z.union([z.number(), z.string()]).optional(),
+    scaleForkInches: z.union([z.number(), z.string()]).optional(),
   })
   .strict();
 
@@ -43,6 +46,7 @@ export type PreparedRecipe =
 export async function prepareRecipe(
   body: unknown,
   lookup: (barcode: string) => Promise<OffLookup>,
+  scale: DishScale = defaultDishScale(),
 ): Promise<PreparedRecipe> {
   const parsed = requestSchema.safeParse(body);
   if (!parsed.success) {
@@ -101,7 +105,18 @@ export async function prepareRecipe(
   }
 
   if (dish) images.push({ ...dish, role: "dish" });
-  return { needsVision: true, vision: { lines, images }, barcodeItems };
+  return {
+    needsVision: true,
+    vision: {
+      lines,
+      images,
+      scale: applyScaleOverride(scale, {
+        plateInches: parsed.data.scalePlateInches,
+        forkInches: parsed.data.scaleForkInches,
+      }),
+    },
+    barcodeItems,
+  };
 }
 
 export async function estimatePreparedRecipe(prepared: Extract<PreparedRecipe, { needsVision: true }>, provider: VisionProvider | null): Promise<MealAnalysis> {

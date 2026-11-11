@@ -75,6 +75,8 @@ describe("openai provider", () => {
     expect(body.response_format.json_schema.strict).toBe(true);
     expect(body.response_format.json_schema.schema.additionalProperties).toBe(false);
     expect(body.messages[0].content).toContain("other people's plates");
+    expect(body.messages[0].content).toContain("9.5 inches (24.13 cm)");
+    expect(body.messages[0].content).toContain("7.5 inches (19.05 cm)");
     expect(body.messages[1].content[1].image_url.url).toBe("data:image/jpeg;base64,aaaa");
     expect(JSON.stringify(body)).not.toContain("sk-test-secret");
     expect(SYSTEM_PROMPT.toLowerCase()).toContain("scraps");
@@ -135,6 +137,8 @@ describe("gemini provider", () => {
     expect(JSON.stringify(body.generationConfig.responseJsonSchema)).not.toContain("additionalProperties");
     expect(body.contents[0].parts[1].inlineData).toEqual({ mimeType: "image/jpeg", data: "cccc" });
     expect(body.systemInstruction.parts[0].text).toContain("other people's plates");
+    expect(body.systemInstruction.parts[0].text).toContain("9.5 inches (24.13 cm)");
+    expect(body.systemInstruction.parts[0].text).toContain("paper plate");
     expect(calls[0]?.url).not.toContain("AIza-test-secret");
     expect(JSON.stringify(body)).not.toContain("AIza-test-secret");
   });
@@ -256,6 +260,9 @@ describe("gemini provider", () => {
         const parts = body.contents?.[0]?.parts ?? [];
         expect(parts.filter((part) => part.inlineData).map((part) => part.inlineData?.data)).toEqual(["rice", "chicken", "dish"]);
         expect(body.systemInstruction?.parts?.[0]?.text).toContain("whole batch");
+        expect(body.systemInstruction?.parts?.[0]?.text).toContain("9.5 inches (24.13 cm)");
+        expect(body.systemInstruction?.parts?.[0]?.text).toContain("sanity check");
+        expect(parts[0]?.text).toContain("9.5 inches (24.13 cm)");
         expect(parts[0]?.text).toContain("2 cups rice");
         if (urls.length < 3) {
           return new Response(JSON.stringify({ error: { message: "high demand", status: "UNAVAILABLE" } }), { status: 503 });

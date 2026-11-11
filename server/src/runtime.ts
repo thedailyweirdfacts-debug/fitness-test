@@ -13,6 +13,7 @@ export function runtimeOptions(env: NodeJS.ProcessEnv = process.env): ServerOpti
   const serviceKey = env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
   return {
     provider: createProvider(config),
+    dishScale: config.scale,
     providerId: config.providerId,
     model: config.model,
     appSecret: env.APP_SECRET?.trim() || null,

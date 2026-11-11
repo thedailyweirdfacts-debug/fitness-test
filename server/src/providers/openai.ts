@@ -1,14 +1,17 @@
 import { MEAL_JSON_SCHEMA } from "../json-schema.js";
 import { extractJson } from "../json.js";
 import { ProviderError } from "../errors.js";
-import { SYSTEM_PROMPT, USER_PROMPT } from "../prompt.js";
+import { photoSystemPrompt, USER_PROMPT } from "../prompt.js";
+import { defaultDishScale, type DishScale } from "../scale.js";
 import type { FetchLike, VisionProvider } from "./types.js";
 
 export function createOpenAIProvider(options: {
   apiKey: string;
   model: string;
+  scale?: DishScale;
   fetchImpl?: FetchLike;
 }): VisionProvider {
+  const scale = options.scale ?? defaultDishScale();
   const fetchImpl = options.fetchImpl ?? fetch;
   return {
     id: "openai",
@@ -25,7 +28,7 @@ export function createOpenAIProvider(options: {
           body: JSON.stringify({
             model: options.model,
             messages: [
-              { role: "system", content: SYSTEM_PROMPT },
+              { role: "system", content: photoSystemPrompt(image.scale ?? scale) },
               {
                 role: "user",
                 content: [
