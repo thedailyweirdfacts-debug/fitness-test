@@ -14,6 +14,7 @@ import {
 } from "./open-food-facts.js";
 import { createRateLimiter, type RateLimiter } from "./rate-limit.js";
 import { rewardPayload, RewardsNotReady, syncRewardUser, type RewardStore } from "./rewards.js";
+import { defaultDishScale, type DishScale } from "./scale.js";
 import { SECRET_HEADER, secretMatches } from "./secret.js";
 import type { ProviderId, VisionProvider } from "./providers/types.js";
 
@@ -39,6 +40,8 @@ export type ServerOptions = {
   dailyCap?: number;
   lookupProduct?: (barcode: string) => Promise<OffLookup>;
   rewards?: RewardStore;
+  /** Household plate and fork. Defaults are 9.5 in and 7.5 in when omitted. */
+  dishScale?: DishScale;
 };
 
 export type RequestOutcome = {
@@ -175,7 +178,7 @@ export async function handleRequest(
   try {
     const analysis = isText
       ? await analyzeTextRequest(body, options.provider)
-      : await analyzeRequest(body, options.provider, options.lookupProduct ?? lookupOpenFoodFacts);
+      : await analyzeRequest(body, options.provider, options.lookupProduct ?? lookupOpenFoodFacts, options.dishScale ?? defaultDishScale());
     return {
       status: 200,
       body: analysis,
@@ -202,7 +205,7 @@ async function estimateRecipe(
   }
   const body = await input.readBody();
   const user = await requireUser(options, input.header);
-  const prepared = await prepareRecipe(body, options.lookupProduct ?? lookupOpenFoodFacts);
+  const prepared = await prepareRecipe(body, options.lookupProduct ?? lookupOpenFoodFacts, options.dishScale ?? defaultDishScale());
   if (!prepared.needsVision) {
     return { status: 200, body: prepared.analysis };
   }

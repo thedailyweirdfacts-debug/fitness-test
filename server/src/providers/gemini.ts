@@ -1,7 +1,8 @@
 import { MEAL_JSON_SCHEMA } from "../json-schema.js";
 import { extractJson } from "../json.js";
 import { ProviderError } from "../errors.js";
-import { RECIPE_SYSTEM_PROMPT, recipeUserPrompt, SYSTEM_PROMPT, TEXT_SYSTEM_PROMPT, textUserPrompt, USER_PROMPT } from "../prompt.js";
+import { photoSystemPrompt, recipeSystemPrompt, recipeUserPrompt, TEXT_SYSTEM_PROMPT, textUserPrompt, USER_PROMPT } from "../prompt.js";
+import { defaultDishScale, type DishScale } from "../scale.js";
 import { providerMessage } from "./openai.js";
 import type { FetchLike, RecipeVisionRequest, VisionImage, VisionProvider } from "./types.js";
 
@@ -59,6 +60,7 @@ export function createGeminiProvider(options: {
   apiKey: string;
   model: string;
   fallbackModels?: string[];
+  scale?: DishScale;
   fetchImpl?: FetchLike;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
@@ -66,6 +68,7 @@ export function createGeminiProvider(options: {
   const fetchImpl = options.fetchImpl ?? fetch;
   const sleep = options.sleep ?? delay;
   const now = options.now ?? Date.now;
+  const scale = options.scale ?? defaultDishScale();
   const fallbacks = (options.fallbackModels ?? geminiFallbackModels(options.model)).filter(
     (model) => model && model !== options.model,
   );
@@ -74,13 +77,13 @@ export function createGeminiProvider(options: {
     id: "gemini",
     model: options.model,
     analyze(image) {
-      return runChain((model) => requestModel(fetchImpl, options.apiKey, model, image), "vision");
+      return runChain((model) => requestModel(fetchImpl, options.apiKey, model, image, image.scale ?? scale), "vision");
     },
     analyzeText(text) {
       return runChain((model) => requestText(fetchImpl, options.apiKey, model, text), "text");
     },
     analyzeRecipe(request) {
-      return runChain((model) => requestRecipe(fetchImpl, options.apiKey, model, request), "recipe");
+      return runChain((model) => requestRecipe(fetchImpl, options.apiKey, model, request, request.scale ?? scale), "recipe");
     },
   };
 
@@ -118,8 +121,8 @@ export function createGeminiProvider(options: {
   }
 }
 
-async function requestModel(fetchImpl: FetchLike, apiKey: string, model: string, image: VisionImage): Promise<unknown> {
-  return requestGemini(fetchImpl, apiKey, model, SYSTEM_PROMPT, [
+async function requestModel(fetchImpl: FetchLike, apiKey: string, model: string, image: VisionImage, scale: DishScale): Promise<unknown> {
+  return requestGemini(fetchImpl, apiKey, model, photoSystemPrompt(scale), [
     { text: USER_PROMPT },
     { inlineData: { mimeType: image.mimeType, data: image.imageBase64 } },
   ]);
@@ -129,21 +132,29 @@ async function requestText(fetchImpl: FetchLike, apiKey: string, model: string, 
   return requestGemini(fetchImpl, apiKey, model, TEXT_SYSTEM_PROMPT, [{ text: textUserPrompt(description) }]);
 }
 
-async function requestRecipe(fetchImpl: FetchLike, apiKey: string, model: string, request: RecipeVisionRequest): Promise<unknown> {
+async function requestRecipe(
+  fetchImpl: FetchLike,
+  apiKey: string,
+  model: string,
+  request: RecipeVisionRequest,
+  scale: DishScale,
+): Promise<unknown> {
   const ingredientPhotos = request.images.filter((image) => image.role === "ingredient").length;
+  const dishPhoto = request.images.some((image) => image.role === "dish");
   const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [
     {
       text: recipeUserPrompt({
         lines: request.lines,
         ingredientPhotos,
-        dishPhoto: request.images.some((image) => image.role === "dish"),
+        dishPhoto,
+        scale,
       }),
     },
   ];
   for (const image of request.images) {
     parts.push({ inlineData: { mimeType: image.mimeType, data: image.imageBase64 } });
   }
-  return requestGemini(fetchImpl, apiKey, model, RECIPE_SYSTEM_PROMPT, parts);
+  return requestGemini(fetchImpl, apiKey, model, recipeSystemPrompt(scale), parts);
 }
 
 async function requestGemini(

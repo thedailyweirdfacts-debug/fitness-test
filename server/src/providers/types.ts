@@ -1,6 +1,10 @@
+import type { DishScale } from "../scale.js";
+
 export type VisionImage = {
   imageBase64: string;
   mimeType: string;
+  /** Per-photo override. Omitted means the server's configured plate and fork. */
+  scale?: DishScale;
 };
 
 export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
@@ -14,6 +18,8 @@ export type RecipeVisionImage = {
 export type RecipeVisionRequest = {
   lines: string[];
   images: RecipeVisionImage[];
+  /** Used when a finished-dish photo is included. Omitted means the server's configured sizes. */
+  scale?: DishScale;
 };
 
 export interface VisionProvider {

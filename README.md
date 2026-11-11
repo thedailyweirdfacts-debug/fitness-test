@@ -212,7 +212,7 @@ The model is told to:
 - count only the main plate in front of the camera
 - ignore other people's plates and food that is clearly in the background
 - skip crumbs and other scraps
-- use a fork, spoon, hand, or plate when one is visible, to judge size
+- use this household's dinner plate (9.5 inches / 24.13 cm across) and fork (7.5 inches / 19.05 cm long) when they are in the photo, to judge size, then volume and grams. A plate that is clearly someone else's, such as a restaurant platter or a paper plate, is not used as that scale. `SCALE_PLATE_INCHES` and `SCALE_FORK_INCHES` on the server change the numbers; the defaults apply when they are unset.
 
 The server drops anything under about a gram, so a stray crumb cannot become its own line.
 
